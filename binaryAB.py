@@ -2,7 +2,6 @@ import utils.process as process
 import models.model as model
 
 import numpy as np
-print(np.__version__)
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -52,8 +51,40 @@ for x in x_test:
     print("\tInput: {} \t Output: {}".format(x.cpu().detach().numpy(), np.round(VAE_MRF.forward_single_attribute(x=x.float(), attribute='B')[0].cpu().detach().numpy(),decimals=2)))
 
 
+#____
+xA = sample1_df.filter(like='A', axis=1).values
+xB = sample1_df.filter(like='B', axis=1).values
+xA = Variable(torch.from_numpy(xA))
+xB = Variable(torch.from_numpy(xB))
 
-x_test = np.eye(input_dims['A'])[np.arange(input_dims['A'])]
+zA = VAE_MRF.latent(xA.float(), attribute='A',add_variance=True)
+np_zA = zA.cpu().detach().numpy().reshape(num_samples,args.latent_dims)
+
+zB = VAE_MRF.latent(xB.float(), attribute='B',add_variance=True)
+np_zB = zB.cpu().detach().numpy().reshape(num_samples,args.latent_dims)
+
+
+if args.latent_dims==1:
+  plt.plot(np_zA, 'o', color='black',label="zA");
+  plt.plot(np_zB, 's', color='red',label="zB");
+
+  plt.title("Latent Encodings z from A and B Marginal Encoders")
+elif args.latent_dims ==2:
+  #plt.plot(np_zA[:,0], np_zA[:,1],'o', color='black');
+  plt.plot(np_zA[:,0],np_zA[:,1], 'o', color='black',label="zA");
+  plt.plot(np_zB[:,0],np_zB[:,1], 's', color='red',label="zB");
+elif args.latent_dims ==3:
+  from mpl_toolkits.mplot3d import Axes3D
+  fig = plt.figure()
+  ax = Axes3D(fig)
+  #t = np.arange(1000)
+  ax.scatter(np_zA[:,0], np_zA[:,1], np_zA[:,2])
+plt.title("Latent Encodings z from A and B Marginal Encoders")
+plt.legend()
+
+#___
+
+#x_test = np.eye(input_dims['A'])[np.arange(input_dims['A'])]
 xA_evidence = x_test[0] #Evidence is A=0
 #xA_evidence = xA_evidence.repeat(2,1)
 print('A evidence input')

@@ -86,7 +86,14 @@ class VariationalAutoencoder_MRF(nn.Module):
         #covarianceB = torch.diag_embed(varB) #batch_size,3,3
         covarianceA = varA
         covarianceB = varB
-        #self.covarianceAB = torch.nn.Parameter(torch.log(self.covarianceAB))
+        #___
+        #print("covarianceAB")
+        #print(self.covarianceAB)
+        #self.covarianceAB = torch.log(self.covarianceAB)
+        #print(self.covarianceAB)
+        #covarianceA = torch.log(covarianceA)
+        #covarianceB = torch.log(covarianceB)
+        #___
         #muA = muA.unsqueeze(2) #batch_size,latent dims
         #muB = muB.unsqueeze(2)
         #z = z.unsqueeze(2)
@@ -111,12 +118,48 @@ class VariationalAutoencoder_MRF(nn.Module):
           print(test3.shape)
           print("muB.shape")
           print(muB.shape)
-          mu_cond = muB + torch.matmul(torch.matmul(torch.transpose(self.covarianceAB,0,1),#,0,1) before
-                                                    torch.inverse(covarianceA)), 
-                                       (z - muA)) # z is zA
-          var_cond = covarianceB - torch.matmul(torch.matmul(torch.transpose(self.covarianceAB,0,1), 
-                                                              torch.inverse(covarianceA)),
-                                                 self.covarianceAB)
+          #mu_cond = muB + torch.matmul(torch.matmul(torch.transpose(self.covarianceAB,0,1),#,0,1) before
+          #                                          torch.inverse(covarianceA)), 
+          #                             (z - muA)) # z is zA
+          #var_cond = covarianceB - torch.matmul(torch.matmul(torch.transpose(self.covarianceAB,0,1), 
+          #                                                    torch.inverse(covarianceA)),
+          #                                       self.covarianceAB)
+          #__
+          from scipy.special import logsumexp
+          #def log_space_product(A,B):
+          #    Astack = np.stack([A]*A.shape[0]).transpose(2,1,0)
+          #    Bstack = np.stack([B]*B.shape[1]).transpose(1,0,2)
+          #    return logsumexp(Astack+Bstack, axis=0)
+          def log_space_product(A,B):
+            return np.log(np.dot(np.exp(A), np.exp(B)))
+          print("transpose covarianceAB")
+          print(torch.transpose(self.covarianceAB,0,1).numpy())
+          print("inverse covariance A")
+          print(torch.inverse(covarianceA).numpy())
+          test4 = torch.tensor(log_space_product(torch.transpose(self.covarianceAB,0,1).numpy(),
+                                          torch.inverse(covarianceA).numpy())) #2x2
+
+          #x = torch.transpose(x,0,1) #[10000, 2])
+          print(test4.shape) #2x2
+          x=z-muA #[2, 10000]
+          #print(x.shape)
+          print(test4.numpy().shape)
+          print(x.numpy().shape)
+          print(test4)
+          print(x)
+          #test55 = torch.matmul()
+          test5 = log_space_product(test4.numpy(), x.numpy()) #2,10000
+          print(test5)
+          print("test5.shape")
+          print(test5.shape)
+          mu_cond = muB + torch.exp(torch.tensor(log_space_product(torch.tensor(log_space_product(torch.transpose(self.covarianceAB,0,1),
+                                          torch.inverse(covarianceA))), 
+                              (z - muA))))
+          logvar_cond = covarianceB - torch.tensor(log_space_product(torch.tensor(log_space_product(
+                      torch.transpose(self.covarianceAB,0,1), torch.inverse(covarianceA))),self.covarianceAB))
+          #print(var_cond)
+          #logvar_cond = torch.log(var_cond)
+          #__
               # var_cond is not a diagonal covariance matrix
           #var_cond = var_cond + 20*torch.eye(latent_dims)
 
@@ -124,7 +167,12 @@ class VariationalAutoencoder_MRF(nn.Module):
         eps = torch.randn_like(mu_cond) #64x3x1, 64x3x3 if use var_cond
         print("mu_cond shape")
         print(mu_cond.shape)
-        z_cond = mu_cond + torch.matmul(torch.sqrt(var_cond),eps) #64x3x1 #2,10000 
+        #print(mu_cond_new.shape)
+        #print(var_cond.shape)
+        print(logvar_cond.shape)
+        z_cond = mu_cond + torch.matmul(torch.sqrt(torch.diag(var_cond)),eps) #64x3x1 #2,10000 
+        print(logvar_cond)
+        z_cond = mu_cond + torch.matmul(torch.exp(0.5*logvar_cond),eps)
         z_cond = torch.transpose(z_cond,0,1) #10000,2
         print("z_cond shape")
         print(z_cond.shape)
