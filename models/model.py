@@ -59,12 +59,13 @@ class VariationalAutoencoder_MRF(nn.Module):
         self.logvarA_emp = torch.unsqueeze(torch.unsqueeze(torch.tensor(z_obs_cov[0][0]).float(),0),0)
         self.logvarB_emp = torch.unsqueeze(torch.unsqueeze(torch.tensor(z_obs_cov[1][1]).float(),0),0)
         self.covarianceAB = torch.unsqueeze(torch.unsqueeze(torch.tensor(z_obs_cov[1][0]).float(),0),0)
-      elif self.latent_dims == 2:
-        self.muA_emp= torch.unsqueeze(torch.tensor(z_obs_mean[0:2]).float(),1)
-        self.muB_emp= torch.unsqueeze(torch.tensor(z_obs_mean[2:4]).float(),1)
-        self.logvarA_emp = torch.tensor(z_obs_cov[0:2,0:2]).float()
-        self.logvarB_emp = torch.tensor(z_obs_cov[2:4,2:4]).float()
-        self.covarianceAB = torch.tensor(z_obs_cov[0:2,2:4]).float()
+      elif self.latent_dims > 1:
+        i = self.latent_dims
+        self.muA_emp= torch.unsqueeze(torch.tensor(z_obs_mean[0:i]).float(),1)
+        self.muB_emp= torch.unsqueeze(torch.tensor(z_obs_mean[i:i+i]).float(),1)
+        self.logvarA_emp = torch.tensor(z_obs_cov[0:i,0:i]).float()
+        self.logvarB_emp = torch.tensor(z_obs_cov[i:i+i,i:i+i]).float()
+        self.covarianceAB = torch.tensor(z_obs_cov[0:i,i:i+i]).float()
 
 
       print("Means of zA,zB")
@@ -86,17 +87,6 @@ class VariationalAutoencoder_MRF(nn.Module):
         #covarianceB = torch.diag_embed(varB) #batch_size,3,3
         covarianceA = varA
         covarianceB = varB
-        #___
-        #print("covarianceAB")
-        #print(self.covarianceAB)
-        #self.covarianceAB = torch.log(self.covarianceAB)
-        #print(self.covarianceAB)
-        #covarianceA = torch.log(covarianceA)
-        #covarianceB = torch.log(covarianceB)
-        #___
-        #muA = muA.unsqueeze(2) #batch_size,latent dims
-        #muB = muB.unsqueeze(2)
-        #z = z.unsqueeze(2)
         if attribute == 'A':
           mu_cond = muA + torch.matmul(torch.matmul(self.covarianceAB, 
                                                     torch.inverse(covarianceB)),
@@ -106,76 +96,19 @@ class VariationalAutoencoder_MRF(nn.Module):
                                                   torch.transpose(self.covarianceAB,0,1))
           #var_cond = var_cond + 20*torch.eye(latent_dims) # regularization
         elif attribute == 'B':
-          print(self.covarianceAB.size()) #[2,2]
-          print(torch.transpose(self.covarianceAB,0,1).size()) #[2,2]
-          print(torch.inverse(covarianceA).size()) #[2,2]
-          print(z.size()) #[2,10000] #zA
-          print(muA.size()) #[2,1]
-          test = torch.matmul(torch.transpose(self.covarianceAB,0,1),torch.inverse(covarianceA))
-          test2 = z - muA #[2,10000]
-          test3 = torch.matmul(test,test2) #[2,10000]
-          print("test3.shape")
-          print(test3.shape)
-          print("muB.shape")
-          print(muB.shape)
-          #mu_cond = muB + torch.matmul(torch.matmul(torch.transpose(self.covarianceAB,0,1),#,0,1) before
-          #                                          torch.inverse(covarianceA)), 
-          #                             (z - muA)) # z is zA
-          #var_cond = covarianceB - torch.matmul(torch.matmul(torch.transpose(self.covarianceAB,0,1), 
-          #                                                    torch.inverse(covarianceA)),
-          #                                       self.covarianceAB)
-          #__
-          from scipy.special import logsumexp
-          #def log_space_product(A,B):
-          #    Astack = np.stack([A]*A.shape[0]).transpose(2,1,0)
-          #    Bstack = np.stack([B]*B.shape[1]).transpose(1,0,2)
-          #    return logsumexp(Astack+Bstack, axis=0)
-          def log_space_product(A,B):
-            return np.log(np.dot(np.exp(A), np.exp(B)))
-          print("transpose covarianceAB")
-          print(torch.transpose(self.covarianceAB,0,1).numpy())
-          print("inverse covariance A")
-          print(torch.inverse(covarianceA).numpy())
-          test4 = torch.tensor(log_space_product(torch.transpose(self.covarianceAB,0,1).numpy(),
-                                          torch.inverse(covarianceA).numpy())) #2x2
-
-          #x = torch.transpose(x,0,1) #[10000, 2])
-          print(test4.shape) #2x2
-          x=z-muA #[2, 10000]
-          #print(x.shape)
-          print(test4.numpy().shape)
-          print(x.numpy().shape)
-          print(test4)
-          print(x)
-          #test55 = torch.matmul()
-          test5 = log_space_product(test4.numpy(), x.numpy()) #2,10000
-          print(test5)
-          print("test5.shape")
-          print(test5.shape)
-          mu_cond = muB + torch.exp(torch.tensor(log_space_product(torch.tensor(log_space_product(torch.transpose(self.covarianceAB,0,1),
-                                          torch.inverse(covarianceA))), 
-                              (z - muA))))
-          logvar_cond = covarianceB - torch.tensor(log_space_product(torch.tensor(log_space_product(
-                      torch.transpose(self.covarianceAB,0,1), torch.inverse(covarianceA))),self.covarianceAB))
-          #print(var_cond)
-          #logvar_cond = torch.log(var_cond)
-          #__
-              # var_cond is not a diagonal covariance matrix
-          #var_cond = var_cond + 20*torch.eye(latent_dims)
+          mu_cond = muB + torch.matmul(torch.matmul(torch.transpose(self.covarianceAB,0,1),
+                                                    torch.inverse(covarianceA)), 
+                                       (z - muA)) # z is zA
+          var_cond = covarianceB - torch.matmul(torch.matmul(torch.transpose(self.covarianceAB,0,1), 
+                                                              torch.inverse(covarianceA)),
+                                                 self.covarianceAB)
 
         # METHOD1: re-parameterization trick to sample z_cond
         eps = torch.randn_like(mu_cond) #64x3x1, 64x3x3 if use var_cond
-        print("mu_cond shape")
-        print(mu_cond.shape)
-        #print(mu_cond_new.shape)
-        #print(var_cond.shape)
-        print(logvar_cond.shape)
         z_cond = mu_cond + torch.matmul(torch.sqrt(torch.diag(var_cond)),eps) #64x3x1 #2,10000 
-        print(logvar_cond)
-        z_cond = mu_cond + torch.matmul(torch.exp(0.5*logvar_cond),eps)
-        z_cond = torch.transpose(z_cond,0,1) #10000,2
-        print("z_cond shape")
-        print(z_cond.shape)
+        z_cond = torch.transpose(z_cond,0,1) 
+        #print("z_cond shape")
+        #print(z_cond.shape) #10000, latent_dims
         #z_cond = mu_cond + torch.matmul(var_cond,eps)
         #z_cond = z_cond.squeeze(2) #64x3
         return z_cond
@@ -203,13 +136,6 @@ class VariationalAutoencoder_MRF(nn.Module):
       #When given both xA and xB, need to recalculate mu's and logvar's??
       #self.emp_covariance(xA,xB)
 
-
-      # Take batch emperical average of mus and logvars
-      #size_placeholder = muA.size() #[batch_size,latent_dims]
-      #muA_emp = torch.mean(muA,0,keepdim=True).repeat(size_placeholder,1) #(batchsize,latent_dims) all repeated values of avg
-      #logvarA_emp = torch.mean(logvarA,0,keepdim=True).repeat(size_placeholder,1)
-      #muB_emp = torch.mean(muB,0,keepdim=True).repeat(size_placeholder,1)
-      #logvarB_emp = torch.mean(logvarB,0,keepdim=True).repeat(size_placeholder,1)
       if attribute == 'A':
         zB = self.VAE_B.reparameterize(muB, logvarB)
         zA = self.conditional(self.muA_emp, self.logvarA_emp, self.muB_emp, self.logvarB_emp, zB, attribute)
@@ -227,8 +153,8 @@ class VariationalAutoencoder_MRF(nn.Module):
           z = self.VAE_B.latent(x, add_variance)
       z = z.unsqueeze(1) #[latent_dims,1]
       z = z.repeat_interleave(query_repetitions,dim=1) #[latent_dims,10000]
-      print("zA shape")
-      print(z.shape)
+      #print("zA shape")
+      #print(z.shape)
       return z
       raise Exception('Invalid attribute {} provided.'.format(attribute))
 
@@ -315,7 +241,6 @@ def trainVAE(VAE, sample1_OHE, attribute: str):
           x_batch = x[b: b+VAE.batch_size]
           #feed forward
           batch_recon,latent_mu,latent_logvar = VAE.forward(x_batch.float())
-          # Error
           #Convert x_batch from OHE vectors to single scalar
           # max returns index location of max value in each sample of batch 
           _, x_batch_targets = x_batch.max(dim=1)
@@ -344,10 +269,6 @@ def trainVAE(VAE, sample1_OHE, attribute: str):
           _, x_targets = x.max(dim=1)
           CE_,KLd,test_loss = vae_loss(VAE,train_recon, x_targets, train_mu, train_logvar)
           print("\t CE: {:.5f}, KLd: {:.5f}, Test loss: {:.5f}".format(CE,KLd,test_loss.item()), end='')
-
-          #print('Visualize ' + attribute + 'predictions')
-          #print(train_recon[0:5])
-          #print(x_targets[0:5])
 
   print("\nTraining marginal VAE for " + attribute+ " finished!")
   #print(loss_hist)

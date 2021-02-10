@@ -1,7 +1,7 @@
 {
     "data_name" : "data_2",
     "data_dir" : "./data/",
-    "latent_dims" : 2, 
+    "latent_dims" : 3, 
     "num_epochs" : 200,
     "num_epochs_optimal_comment":500,
     "batch_size" : 50,

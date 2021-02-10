@@ -20,8 +20,8 @@ df = process.duplicate_dataframe(df, attributes, duplications=100)
 df= df.astype(int)
 num_samples = 500
 input_dims = {'A': 2,'B': 2}
-sample1_df = df[['A','B']].sample(n=num_samples, random_state=args.random_seed)
-sample1_df = process.one_hot_encode_columns(sample1_df, ['A','B'])
+sample1_df = df[attributes].sample(n=num_samples, random_state=args.random_seed)
+sample1_df = process.one_hot_encode_columns(sample1_df, attributes)
 print(sample1_df)
 
 #  use gpu if available
@@ -67,7 +67,6 @@ np_zB = zB.cpu().detach().numpy().reshape(num_samples,args.latent_dims)
 if args.latent_dims==1:
   plt.plot(np_zA, 'o', color='black',label="zA");
   plt.plot(np_zB, 's', color='red',label="zB");
-
   plt.title("Latent Encodings z from A and B Marginal Encoders")
 elif args.latent_dims ==2:
   #plt.plot(np_zA[:,0], np_zA[:,1],'o', color='black');
@@ -76,9 +75,11 @@ elif args.latent_dims ==2:
 elif args.latent_dims ==3:
   from mpl_toolkits.mplot3d import Axes3D
   fig = plt.figure()
+  #ax = fig.gca(projection='3d')
   ax = Axes3D(fig)
   #t = np.arange(1000)
-  ax.scatter(np_zA[:,0], np_zA[:,1], np_zA[:,2])
+  ax.scatter(np_zA[:,0], np_zA[:,1], np_zA[:,2], label='zA', marker='o',color='black');
+  ax.scatter(np_zB[:,0], np_zB[:,1], np_zB[:,2], label='zB', marker='s',color='red');
 plt.title("Latent Encodings z from A and B Marginal Encoders")
 plt.legend()
 
