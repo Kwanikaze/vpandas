@@ -1,0 +1,12 @@
+{
+    "data_name" : "data_2",
+    "data_dir" : "./data/",
+    "latent_dims" : 2, 
+    "num_epochs" : 200,
+    "num_epochs_optimal_comment":500,
+    "batch_size" : 50,
+    "learning_rate" : 1e-2,
+    "variational_beta" : 5e-9,
+    "random_seed": 2
+}
+
