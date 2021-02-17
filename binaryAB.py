@@ -21,7 +21,7 @@ attributes = list(df.columns) #assumes each attribute has a single column
 df = process.duplicate_dataframe(df, attributes, duplications=100)
 
 df= df.astype(int)
-num_samples = 500
+num_samples = 2000
 sample1_df = df[attributes].sample(n=num_samples, random_state=args.random_seed)
 sample1_df = process.one_hot_encode_columns(sample1_df, attributes)
 print(sample1_df)
