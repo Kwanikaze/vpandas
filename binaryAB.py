@@ -14,12 +14,14 @@ import utils.params as params
 args = params.Params('./hyperparameters/binaryAB.json')
 
 df = process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_2.csv')
+input_dims = {'A': 2,'B': 2} #dicts ordered
+data2 = False
+
 attributes = list(df.columns) #assumes each attribute has a single column
 df = process.duplicate_dataframe(df, attributes, duplications=100)
 
 df= df.astype(int)
 num_samples = 500
-input_dims = {'A': 2,'B': 2} #dicts ordered
 sample1_df = df[attributes].sample(n=num_samples, random_state=args.random_seed)
 sample1_df = process.one_hot_encode_columns(sample1_df, attributes)
 print(sample1_df)
@@ -37,8 +39,9 @@ model.trainVAE_MRF(VAE_MRF,attributes,sample1_df)
 
 
 x_test = np.eye(input_dims["A"])[np.arange(input_dims["A"])]  # Test data (one-hot encoded)
-duplicates = 5
-x_test = np.repeat(x_test, [duplicates,duplicates],axis=0)
+if data2:
+  duplicates = 5
+  x_test = np.repeat(x_test, [duplicates,duplicates],axis=0)
 x_test = Variable(torch.from_numpy(x_test))
 x_test = x_test.to(device)
 
@@ -106,4 +109,24 @@ _,indices_max =xB_query.max(dim=1)
 unique, counts = np.unique(indices_max.numpy(), return_counts=True)
 print(dict(zip(unique, counts)))
 
+#____
+xA_evidence = x_test[9] #Evidence is A=9
+#xA_evidence = xA_evidence.repeat(2,1)
+print('A evidence input')
+print(xA_evidence) #need to resize/ view for single sample, or make evidence a batch repeated
+x_evidence_dict = {'A': xA_evidence}
+xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'B', evidence_attributes = ['A'], query_repetitions=10000)
+print('B query output, first 5 rows:')
+print(np.round(xB_query[0:5].cpu().detach().numpy(),decimals=2))
+
+#Averaging all xB_query
+print('xB_query mean of each column:')
+print(torch.mean(xB_query,0).detach().numpy())
+
+#Taking max of each row in xB_query and counting times each element is max
+print('xB_query count of when each column is max:')
+_,indices_max =xB_query.max(dim=1) 
+#print(indices_max.numpy())
+unique, counts = np.unique(indices_max.numpy(), return_counts=True)
+print(dict(zip(unique, counts)))
 

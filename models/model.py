@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.distributions.multivariate_normal import MultivariateNormal
+from scipy.stats import multivariate_normal as mvn
 
 class VariationalAutoencoder_MRF(nn.Module):
     def __init__(self,df,attributes, input_dims, num_samples, args):
@@ -14,26 +15,12 @@ class VariationalAutoencoder_MRF(nn.Module):
         self.input_dims = input_dims # dict # possible outcomes for each categorical attribute
         self.num_samples = num_samples
         self.attributes = attributes
-        
-        #Dictionary of Marginal VAEs for each attribute
-        self.marginalVAEs = {a: marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args) for a in attributes}
-        #need to enforce order of attributes A1,B2,C3 to be able to marginalize
-        #ordered dict
-        #https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Conditional_distributions
+        self.marginalVAEs = {a: marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args) for a in attributes} #Dictionary of Marginal VAEs for each attribute
         self.mu_emp = {} # vector of mu's for all attributes
         self.covar_emp = {} # covariance matrix for all attributes
         self.mu_dict = {} # dict of tensors of mu's for each attribute
         self.covar_dict = {} # dict of tensors of variance for each pair of attributes
-        #self.VAE_A = marginalVAE.marginalVAE(self.input_dims["A"],num_samples,args)
-        #self.VAE_B = marginalVAE.marginalVAE(self.input_dims["B"],num_samples,args)
-        #Emperical mu and logvar
-        #self.muA_emp = 0
-        #self.muB_emp = 0
-        #self.logvarA_emp = 0
-        #self.logvarB_emp = 0
-        #self.covarianceAB =torch.randn(size=(self.latent_dims,self.latent_dims))
         #Need to make covarianceAB a parameter, requires_grad=True
-
 
     #Stage 1 - Train Marginal VAEs and then freeze parameters
     def train_marginals(self):
@@ -42,26 +29,12 @@ class VariationalAutoencoder_MRF(nn.Module):
           for param in self.marginalVAEs[attribute_key].parameters():
             param.requires_grad = False
         print('Parameters for Marginal VAEs fixed')
-        #trainVAE(self.VAE_A,self.df, 'A')
-        #trainVAE(self.VAE_B,self.df, 'B')
-        #for param in self.VAE_A.parameters():
-        #  param.requires_grad = False
-        #for param in self.VAE_B.parameters():
-        #  param.requires_grad = False
-
-
 
     def emp_covariance(self,x_dict):
       z_dict = {a: self.latent(x_dict[a].float(), attribute=a, add_variance=True)  for a in self.attributes}
       np_z_dict = {a: z_dict[a].cpu().detach().numpy().reshape(self.num_samples,self.latent_dims) for a in self.attributes}  
       
-      #zA = self.latent(xA.float(), attribute='A', add_variance=True)
-      #np_zA = zA.cpu().detach().numpy().reshape(self.num_samples,self.latent_dims)
-      #zB = self.latent(xB.float(), attribute='B', add_variance=True)
-      #np_zB = zB.cpu().detach().numpy().reshape(self.num_samples,self.latent_dims)
-      
-      z_obs = np.concatenate(tuple(np_z_dict.values()),axis=1)
-      # z_obs = np.concatenate((np_zA, np_zB),axis=1) #(num_samples,num_attrs*latent_dims) #(500,4)
+      z_obs = np.concatenate(tuple(np_z_dict.values()),axis=1) #(num_samples,num_attrs*latent_dims)
       self.mu_emp = np.mean(z_obs,axis=0)
       self.covar_emp = np.cov(z_obs,rowvar=False)
       ld = self.latent_dims
@@ -80,46 +53,23 @@ class VariationalAutoencoder_MRF(nn.Module):
           self.covar_dict[a+b] = torch.tensor(self.covar_dict[a+b]).float() #each entry: latent dim, latent dim
           j += ld
         i += ld
-      #for attribute in self.attributes:
-      #  self.mu_emp[attribute]
-      #z_obs_mean = np.mean(z_obs,axis=0) #Sample mean, [num_attrs*latent_dims,] (4,)
-      #z_obs_cov = np.cov(z_obs,rowvar=False) #Sample covariance, rowvar=false means each column a variable
-      #if self.latent_dims == 1:
-      #  self.muA_emp= torch.unsqueeze(torch.unsqueeze(torch.tensor(z_obs_mean[0]).float(),0),0)
-      #  self.muB_emp = torch.unsqueeze(torch.unsqueeze(torch.tensor(z_obs_mean[1]).float(),0),0)
-      #  self.logvarA_emp = torch.unsqueeze(torch.unsqueeze(torch.tensor(z_obs_cov[0][0]).float(),0),0)
-      #  self.logvarB_emp = torch.unsqueeze(torch.unsqueeze(torch.tensor(z_obs_cov[1][1]).float(),0),0)
-      #  self.covarianceAB = torch.unsqueeze(torch.unsqueeze(torch.tensor(z_obs_cov[1][0]).float(),0),0)
-      #elif self.latent_dims > 1:
-      #  i = self.latent_dims
-    #self.muA_emp= torch.unsqueeze(torch.tensor(z_obs_mean[0:i]).float(),1)
-      #  self.muB_emp= torch.unsqueeze(torch.tensor(z_obs_mean[i:i+i]).float(),1)
-      #  self.logvarA_emp = torch.tensor(z_obs_cov[0:i,0:i]).float()
-      #  self.logvarB_emp = torch.tensor(z_obs_cov[i:i+i,i:i+i]).float()
-      #  self.covarianceAB = torch.tensor(z_obs_cov[0:i,i:i+i]).float()
 
-
-      print("Means of Z")
+      print("Mu's of Z")
       print(self.mu_emp)
       for a in self.attributes:
+        print(a)
         print(self.mu_dict[a])
-      #print(self.muA_emp)
-      #print(self.muB_emp)
+
       print("Covariance Matrix of Z")
       print(self.covar_emp)
       for a in self.attributes:
         for b in self.attributes:
           print(a+b)
           print(self.covar_dict[a+b])
-      #print(self.logvarA_emp)
-      #print(self.logvarB_emp)
-      #print(self.covarianceAB)
+
 
 
     # Conditional of Multivariate Gaussian
-    # Attribute is the one to be estimated
-    # z is evidence encoded, 10000 times
-    #self.mu_emp,self.logvar_emp,z_evidence,evidence_attributes, query_attribute
     def conditional(self, z_evidence_dict, evidence_attributes, query_attribute,query_repetitions):      
         relevant_attributes = self.attributes.copy() #keeps order
         for a in self.attributes:
@@ -128,161 +78,89 @@ class VariationalAutoencoder_MRF(nn.Module):
         
         evidence_attributes = relevant_attributes.copy()
         evidence_attributes.remove(query_attribute)
-
-        non_relevant_attributes = self.attributes.copy()
-        for a in self.attributes:
-          if a in relevant_attributes:
-            non_relevant_attributes.remove(a)
-         
-
-        #marginalize out non relevant attributes, keeps dict order the same
-        mu_relevant = self.mu_dict.copy()
-        for k,v in self.mu_dict.items():
-          for nr in non_relevant_attributes:
-            if (nr == k) and (k in mu_relevant.keys()):
-              del mu_relevant[k]
-        #mu_relevant = {r: self.mu_dict[r] for r in relevant_attributes} #efficient but order changed
-
-        covar_relevant = self.covar_dict.copy()
-        for k,v in self.covar_dict.items():
-          for nr in non_relevant_attributes:
-            if (nr in k) and (k in covar_relevant.keys()):
-              del covar_relevant[k]
-        print("mu_relevant")
-        print(mu_relevant)
-        print("covar_relevant")
-        print(covar_relevant)
         
-        #Unpack z_evidence_dict into single tensor with dimension (,1), keep order
-        evidence_tensors = []
+        evidence_tensors = []  #Unpack z_evidence_dict into single tensor 
         for a in self.attributes:
           if a in z_evidence_dict.keys():
             evidence_tensors.append(z_evidence_dict[a]) #latent_dim,1
-        z = torch.cat(evidence_tensors,dim=0)
-        z = z.repeat_interleave(query_repetitions,dim=1) #[latent_dims*evidence_vars,10000]
-        #z = z.transpose(0,1) 
-        #print("z evidence shape 10k")
-        #print(z.shape)
+        z = torch.cat(evidence_tensors,dim=0) #latent_dims*evidence_vars,1
 
-        #Following notation here: https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Conditional_distributions
-        mu1 = mu_relevant[query_attribute]
-        #mu2_dict = mu_relevant.copy()
-        #del mu2_dict[query_attribute]
-        mu2_tensors = []
-        #for v in mu2_dict.values():
-        #  mu2_tensors.append(v)
-        for e in evidence_attributes:
-          mu2_tensors.append(mu_relevant[e])
-        mu2 = torch.cat(mu2_tensors,dim=0)
-        print("mu2 shape")
-        print(mu2.shape)
-
-        sigma11 = covar_relevant[query_attribute+query_attribute]
-        #sigma22_dict = covar_relevant.copy()
-        #for k,v in covar_relevant.items():
-        #  if (query_attribute in k) and (k in sigma22_dict.keys()):
-        #    del sigma22_dict[k]
-        # pre-allocate size of sigma22
+        #notation: https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Conditional_distributions
         q = self.latent_dims
         N_minus_q = q*len(evidence_attributes)
-        sigma22 = torch.empty(N_minus_q,N_minus_q)
-
         
+        mu1 = self.mu_dict[query_attribute]
+        
+        mu2 = torch.empty(N_minus_q,1)
+        i=0
+        for e in evidence_attributes:
+          mu2[i:i+q, 0:1] = self.mu_dict[e]
+          i += q
+
+        print("mu2 shape")
+        print(mu2.shape)
+        print(mu2)
+
+        sigma11 = self.covar_dict[query_attribute+query_attribute]
+
+        sigma22 = torch.empty(N_minus_q,N_minus_q)
         i = 0 #row counter
         for e_i in evidence_attributes:
           j = 0 #column counter
           for e_j in evidence_attributes:
-            sigma22[i:i+q,j:j+q] = covar_relevant[e_i + e_j] #how to backprop?
+            sigma22[i:i+q,j:j+q] = self.covar_dict[e_i + e_j] #how to backprop?
             j += q
           i += q
-        #sigma22_tensors.append(sigma22_dict[e_i + e_j])
-        #sigma22 = torch.cat(sigma22_tensors, dim=1) # latent_dims, latent_dims* # evidence_attributes^2
-        #sigma22 = sigma22.reshape(latent_dims*len(evidence_attributes), latent_dims*len(evidence_attributes)) #latent_dims*evidence attributes, latent_dims*evidence attributes
+       
         sigma12 = torch.empty(q, N_minus_q)
         i=0
         for e in evidence_attributes:
-          sigma12[0:q, i:i+q] = covar_relevant[query_attribute + e]
+          sigma12[0:q, i:i+q] = self.covar_dict[query_attribute + e]
           i += q
         
         sigma21 = torch.empty(N_minus_q, q)
         i = 0
         for e in evidence_attributes:
-          sigma12[i:i+q,0:q] = covar_relevant[e + query_attribute]
+          sigma21[i:i+q,0:q] = self.covar_dict[e + query_attribute]
           i += q
-
+        '''
         print("sigma11 shape")
         print(sigma11.shape)
+        print(sigma11)
         print("sigma22 shape")
         print(sigma22.shape)
+        print(sigma22)
         print("sigma12 shape")
         print(sigma12.shape)
+        print(sigma12)
         print("sigma21 shape")
         print(sigma21.shape)
+        print(sigma21)
+        '''
+        mu_cond = mu1 + torch.matmul(torch.matmul(sigma12,torch.inverse(sigma22)), (z-mu2))
+        var_cond = sigma11 - torch.matmul(torch.matmul(sigma12,torch.inverse(sigma22)),sigma21)
 
+        mu_cond_T = torch.transpose(mu_cond,0,1).detach().cpu().numpy()
+        z_cond = mvn(mean=mu_cond_T[0],cov=var_cond).rvs(query_repetitions) #10k,latent_dims
 
-        covarianceA = varA
-        covarianceB = varB
-        if query_attribute == 'A':
-          mu_cond = muA + torch.matmul(torch.matmul(self.covarianceAB, 
-                                                    torch.inverse(covarianceB)),
-                                      (z - muB)) # z is zB
-          var_cond = covarianceA - torch.matmul(torch.matmul(self.covarianceAB, 
-                                                                torch.inverse(covarianceB)),
-                                                  torch.transpose(self.covarianceAB,0,1))
-          #var_cond = var_cond + 20*torch.eye(latent_dims) # regularization
-        elif query_attribute == 'B':
-          mu_cond = muB + torch.matmul(torch.matmul(torch.transpose(self.covarianceAB,0,1),
-                                                    torch.inverse(covarianceA)), 
-                                       (z - muA)) # z is zA
-          var_cond = covarianceB - torch.matmul(torch.matmul(torch.transpose(self.covarianceAB,0,1), 
-                                                              torch.inverse(covarianceA)),
-                                                 self.covarianceAB)
-
-        # METHOD1: re-parameterization trick to sample z_cond
-        eps = torch.randn_like(mu_cond) #64x3x1, 64x3x3 if use var_cond
-        z_cond = mu_cond + torch.matmul(torch.sqrt(torch.diag(var_cond)),eps) #64x3x1 #2,10000 
-        z_cond = torch.transpose(z_cond,0,1) 
-        #print("z_cond shape")
-        #print(z_cond.shape) #10000, latent_dims
-        #z_cond = mu_cond + torch.matmul(var_cond,eps)
-        #z_cond = z_cond.squeeze(2) #64x3
-        #return z_cond
-        #____
-        from scipy.stats import multivariate_normal as mvn
-        n_samps_to_draw = 10000
-        mu_cond_T = torch.transpose(mu_cond,0,1)
-        print(mu_cond_T[0].shape)
-        z_cond = mvn(mean=mu_cond_T[0],cov=var_cond).rvs(n_samps_to_draw)
-        print(z_cond.shape)
-        #print("z_cond shape 2")
-        #print(z_cond.shape)
-        print(z_cond[0:10])
-        #z_cond = mu_cond + torch.matmul(var_cond,eps)
-        #z_cond = z_cond.squeeze(2) #64x3
+        print("mu_cond")
+        print(mu_cond_T[0])
+        print("var_cond")
+        print(var_cond)
         return torch.tensor(z_cond).float()
 
     #return mu, logvar
     def encode(self, x, attribute):
       return self.marginalVAEs[attribute].encode(x)
-      #if attribute == 'A':
-      #  return self.VAE_A.encode(x)
-      #elif attribute =='B':
-      #  return self.VAE_B.encode(x)
+
     
     #return reconstruction
     def decode(self, z, attribute):
       return self.marginalVAEs[attribute].decode(z)
-      #if attribute == 'A':
-      #  return self.VAE_A.decode(z)
-      #elif attribute =='B':
-      #  return self.VAE_B.decode(z)
+
     
     def latent(self,x,attribute, add_variance=True):
       z = self.marginalVAEs[attribute].latent(x, add_variance)
-      #if attribute == 'A':
-      #    z = self.VAE_A.latent(x, add_variance) #[latent_dims]
-      #elif attribute == 'B':
-      #    z = self.VAE_B.latent(x, add_variance)
       z = z.unsqueeze(1) #[latent_dims,1]
       #print("z shape in latent")
       #print(z.shape)
@@ -291,53 +169,20 @@ class VariationalAutoencoder_MRF(nn.Module):
     #Given x, returns: reconstruction x_hat, mu, log_var
     def forward_single_attribute(self, x, attribute):
       return self.marginalVAEs[attribute].forward(x)
-      #if attribute == 'A':
-      #  return self.VAE_A.forward(x)
-      #elif attribute == 'B':
-      #  return self.VAE_B.forward(x)
+
 
     def query_single_attribute(self, x_evidence_dict, query_attribute, evidence_attributes, query_repetitions=10000):
-      #x_evidence = torch.tensor(x_evidence).float()
       z_evidence_dict = {a: self.latent(torch.tensor(x_evidence_dict[a]).float(),a, add_variance=False) for a in evidence_attributes}
       z_query = self.conditional(z_evidence_dict,evidence_attributes, query_attribute,query_repetitions)
       return self.decode(z_query, query_attribute)
       
-      #if evidence_attribute =='A':
-      #  zA = self.latent(x_evidence,evidence_attribute, add_variance,query_repetitions)
-      #  #Use emperical mus and logvars
-      #  zB = self.conditional(self.muA_emp, self.logvarA_emp, self.muB_emp, self.logvarB_emp, zA, attribute='B')
-      #  return self.decode(zB,attribute='B')
-
-      #elif evidence_attribute =='B':
-      #  zB = self.latent(x_evidence,evidence_attribute,add_variance,query_repetitions)
-      #  zA = self.conditional(self.muA_emp, self.logvarA_emp, self.muB_emp, self.logvarB_emp, zB, attribute='A')
-      #  return self.decode(zA,attribute='A')
 
 def trainVAE_MRF(VAE_MRF,attributes,df):
     VAE_MRF.train() #set model mode to train
     #dict where each dict key is an attribute, each dict value is a np.array without axes labels
-    #x_dict = {}
-    #inds_dict={}
-
     x_dict = {a: Variable(torch.from_numpy(df.filter(like=a,axis=1).values)) for a in attributes}
-    #xA = df.filter(like='A', axis=1).values
-    #xB = df.filter(like='B', axis=1).values
-    #print(xA.shape)
-
-    #sample2_OHE when do BC plate
-    
-    #indsA = list(range(xA.shape[0]))
-    #indsB = list(range(xB.shape[0]))
-
-    #loss_hist = []
-    #xA = Variable(torch.from_numpy(xA))
-    #xB = Variable(torch.from_numpy(xB))
-    
-    #VAE_MRF.emp_covariance(attributes,xA.float(),xB.float())
     VAE_MRF.emp_covariance(x_dict)
-
     print("\nTraining MRF finished!")
-    #print(loss_hist)
 
 def vae_loss(VAE,batch_recon, batch_targets, mu, logvar):
   criterion = nn.CrossEntropyLoss()
@@ -353,7 +198,6 @@ def trainVAE(VAE, sample1_OHE, attribute: str):
   VAE.train() #set model mode to train
   optimizer = torch.optim.Adam(params = VAE.parameters(), lr = VAE.learning_rate)
   x = sample1_OHE.filter(like=attribute, axis=1).values
-  #sample2_OHE when do BC plate
   
   inds = list(range(x.shape[0]))
   N = VAE.num_samples
