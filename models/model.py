@@ -35,7 +35,6 @@ class VariationalAutoencoder_MRF(nn.Module):
       z_dict = {a: self.latent(x_dict[a].float(), attribute=a, add_variance=True)  for a in self.attributes} #num_samples,latent_dims
       np_z_dict = {a: z_dict[a].cpu().detach().numpy().reshape(self.num_samples,self.latent_dims) for a in self.attributes}  #num_samples,latent_dims
       z_obs = np.concatenate(tuple(np_z_dict.values()),axis=1) #(num_samples,num_attrs*latent_dims)
-
       self.mu_emp = np.mean(z_obs,axis=0)
       self.covar_emp = np.cov(z_obs,rowvar=False)
       ld = self.latent_dims
@@ -178,8 +177,9 @@ class VariationalAutoencoder_MRF(nn.Module):
       z_evidence_dict = {a: self.latent(torch.tensor(x_evidence_dict[a]).float(),a, add_variance=False) for a in evidence_attributes}
       z_query, mu_cond, var_cond = self.conditional(z_evidence_dict,evidence_attributes, query_attribute,query_repetitions)
       query_recon =  self.decode(z_query, query_attribute) #10k,latent_dims
+      _, recon_max_idxs = query_recon.max(dim=1)
       if self.latent_dims ==2:
-        checks.graphSamples(mu_cond,var_cond,z_query,evidence_attributes,query_attribute, query_repetitions)
+        checks.graphSamples(mu_cond,var_cond,z_query,recon_max_idxs.cpu().detach().numpy(),evidence_attributes,query_attribute, query_repetitions)
       return query_recon 
       
 

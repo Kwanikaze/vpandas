@@ -38,7 +38,7 @@ def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,num_samples,args):
             plt.legend(loc=1)
         plt.show()
 
-def graphSamples(mu_cond,var_cond,z_cond,evidence_attributes,query_attribute,query_repetitions):
+def graphSamples(mu_cond,var_cond,z_cond,recon_max_idxs,evidence_attributes,query_attribute,query_repetitions):
     #print(z_cond)
     x, y = np.mgrid[-3:3:.01, -3:3:.01]
     pos = np.dstack((x, y))
@@ -49,9 +49,13 @@ def graphSamples(mu_cond,var_cond,z_cond,evidence_attributes,query_attribute,que
     ax2.contourf(x, y, rv.pdf(pos))
     plt.show()
 
-    for s in range(0,query_repetitions):
-        #val = str(x_dict[a][s]).lstrip('[').rstrip(']')
-        #plt.plot(z_cond[s,0],z_cond[s,1], 'o', color=color_dict[val] ,label=val);
-        plt.plot(z_cond[s,0],z_cond[s,1], 'o', color='black' ,label=str(query_attribute));
+    for s in range(0,query_repetitions): 
+        val = str(recon_max_idxs[s])
+        plt.plot(z_cond[s,0],z_cond[s,1], 'o', color=color_dict[val] ,label=val);
+        #plt.plot(z_cond[s,0],z_cond[s,1], 'o', color='black' ,label=str(query_attribute));
     plt.title("P(z{} | z{}) Multivariate Normal Samples".format(query_attribute,str(evidence_attributes).lstrip('[').rstrip(']')))
+    handles, labels = plt.gca().get_legend_handles_labels()
+    labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys(),loc=1)
     plt.show()
