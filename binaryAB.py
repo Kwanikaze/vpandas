@@ -1,4 +1,5 @@
 import utils.process as process
+import utils.checks as checks
 import models.model as model
 
 import numpy as np
@@ -13,29 +14,27 @@ import utils.params as params
 #dict of hyperparameters
 args = params.Params('./hyperparameters/binaryAB.json')
 
-df = process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_6.csv')
-input_dims = {'A': 6,'B': 6} #dicts ordered
+df = process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_3.csv')
+input_dims = {'A': 3,'B': 3} #dicts ordered
 data2 = False
 
 attributes = list(df.columns) #assumes each attribute has a single column
+df= df.astype(int)
 df = process.duplicate_dataframe(df, attributes, duplications=100)
 
-df= df.astype(int)
 num_samples = 2000
 sample1_df = df[attributes].sample(n=num_samples, random_state=args.random_seed)
-sample1_df = process.one_hot_encode_columns(sample1_df, attributes)
-print(sample1_df)
+sample1_df_OHE = process.one_hot_encode_columns(sample1_df, attributes)
+#print(sample1_df)
 
 #  use gpu if available
 use_gpu = False
 device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
-VAE_MRF = model.VariationalAutoencoder_MRF(sample1_df, attributes,input_dims, num_samples,args)
+VAE_MRF = model.VariationalAutoencoder_MRF(sample1_df_OHE, attributes,input_dims, num_samples,args)
 VAE_MRF = VAE_MRF.to(device)
 VAE_MRF.train_marginals()
 
-model.trainVAE_MRF(VAE_MRF,attributes,sample1_df)
-
-
+model.trainVAE_MRF(VAE_MRF,attributes,sample1_df_OHE)
 
 
 x_test = np.eye(input_dims["A"])[np.arange(input_dims["A"])]  # Test data (one-hot encoded)
@@ -55,37 +54,8 @@ for x in x_test:
 
 
 #____
-xA = sample1_df.filter(like='A', axis=1).values
-xB = sample1_df.filter(like='B', axis=1).values
-xA = Variable(torch.from_numpy(xA))
-xB = Variable(torch.from_numpy(xB))
+checks.graphLatentSpace(VAE_MRF,sample1_df,sample1_df_OHE,attributes,num_samples,args)
 
-zA = VAE_MRF.latent(xA.float(), attribute='A',add_variance=True)
-np_zA = zA.cpu().detach().numpy().reshape(num_samples,args.latent_dims)
-
-zB = VAE_MRF.latent(xB.float(), attribute='B',add_variance=True)
-np_zB = zB.cpu().detach().numpy().reshape(num_samples,args.latent_dims)
-
-
-if args.latent_dims==1:
-  plt.plot(np_zA, 'o', color='black',label="zA");
-  plt.plot(np_zB, 's', color='red',label="zB");
-  plt.title("Latent Encodings z from A and B Marginal Encoders")
-elif args.latent_dims ==2:
-  #plt.plot(np_zA[:,0], np_zA[:,1],'o', color='black');
-  plt.plot(np_zA[:,0],np_zA[:,1], 'o', color='black',label="zA");
-  plt.plot(np_zB[:,0],np_zB[:,1], 's', color='red',label="zB");
-elif args.latent_dims ==3:
-  from mpl_toolkits.mplot3d import Axes3D
-  fig = plt.figure()
-  #ax = fig.gca(projection='3d')
-  ax = Axes3D(fig)
-  #t = np.arange(1000)
-  ax.scatter(np_zA[:,0], np_zA[:,1], np_zA[:,2], label='zA', marker='o',color='black');
-  ax.scatter(np_zB[:,0], np_zB[:,1], np_zB[:,2], label='zB', marker='s',color='red');
-plt.title("Latent Encodings z from A and B Marginal Encoders")
-plt.legend()
-plt.show()
 #___
 
 #x_test = np.eye(input_dims['A'])[np.arange(input_dims['A'])]
@@ -95,6 +65,7 @@ print('A evidence input')
 print(xA_evidence) #need to resize/ view for single sample, or make evidence a batch repeated
 x_evidence_dict = {'A': xA_evidence}
 xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'B', evidence_attributes = ['A'], query_repetitions=10000)
+
 print('B query output, first 5 rows:')
 print(np.round(xB_query[0:5].cpu().detach().numpy(),decimals=2))
 
@@ -110,7 +81,7 @@ unique, counts = np.unique(indices_max.numpy(), return_counts=True)
 print(dict(zip(unique, counts)))
 
 #____
-xA_evidence = x_test[5] #Evidensce is A=9
+xA_evidence = x_test[2] #Evidensce is A=9
 #xA_evidence = xA_evidence.repeat(2,1)
 print('A evidence input')
 print(xA_evidence) #need to resize/ view for single sample, or make evidence a batch repeated

@@ -1,4 +1,5 @@
 from models import marginalVAE
+import utils.checks as checks
 import numpy as np
 import torch
 import torch.nn as nn
@@ -30,11 +31,11 @@ class VariationalAutoencoder_MRF(nn.Module):
             param.requires_grad = False
         print('Parameters for Marginal VAEs fixed')
 
-    def emp_covariance(self,x_dict):
-      z_dict = {a: self.latent(x_dict[a].float(), attribute=a, add_variance=True)  for a in self.attributes}
-      np_z_dict = {a: z_dict[a].cpu().detach().numpy().reshape(self.num_samples,self.latent_dims) for a in self.attributes}  
-      
+    def emp_covariance(self,x_dict): #x_dict['A'].shape is num_samples, input_dims
+      z_dict = {a: self.latent(x_dict[a].float(), attribute=a, add_variance=True)  for a in self.attributes} #num_samples,latent_dims
+      np_z_dict = {a: z_dict[a].cpu().detach().numpy().reshape(self.num_samples,self.latent_dims) for a in self.attributes}  #num_samples,latent_dims
       z_obs = np.concatenate(tuple(np_z_dict.values()),axis=1) #(num_samples,num_attrs*latent_dims)
+
       self.mu_emp = np.mean(z_obs,axis=0)
       self.covar_emp = np.cov(z_obs,rowvar=False)
       ld = self.latent_dims
@@ -53,12 +54,13 @@ class VariationalAutoencoder_MRF(nn.Module):
           self.covar_dict[a+b] = torch.tensor(self.covar_dict[a+b]).float() #each entry: latent dim, latent dim
           j += ld
         i += ld
-
+      '''
       print("Mu's of Z")
       print(self.mu_emp)
       for a in self.attributes:
         print(a)
         print(self.mu_dict[a])
+        print(self.mu_dict[a].shape)
 
       print("Covariance Matrix of Z")
       print(self.covar_emp)
@@ -66,7 +68,7 @@ class VariationalAutoencoder_MRF(nn.Module):
         for b in self.attributes:
           print(a+b)
           print(self.covar_dict[a+b])
-
+      '''
 
 
     # Conditional of Multivariate Gaussian
@@ -96,11 +98,11 @@ class VariationalAutoencoder_MRF(nn.Module):
         for e in evidence_attributes:
           mu2[i:i+q, 0:1] = self.mu_dict[e]
           i += q
-
+        '''
         print("mu2 shape")
         print(mu2.shape)
         print(mu2)
-
+        '''
         sigma11 = self.covar_dict[query_attribute+query_attribute]
 
         sigma22 = torch.empty(N_minus_q,N_minus_q)
@@ -142,12 +144,13 @@ class VariationalAutoencoder_MRF(nn.Module):
 
         mu_cond_T = torch.transpose(mu_cond,0,1).detach().cpu().numpy()
         z_cond = mvn(mean=mu_cond_T[0],cov=var_cond).rvs(query_repetitions) #10k,latent_dims
-
+        '''
         print("mu_cond")
         print(mu_cond_T[0])
         print("var_cond")
         print(var_cond)
-        return torch.tensor(z_cond).float()
+        '''
+        return torch.tensor(z_cond).float(),mu_cond_T[0],var_cond
 
     #return mu, logvar
     def encode(self, x, attribute):
@@ -161,7 +164,7 @@ class VariationalAutoencoder_MRF(nn.Module):
     
     def latent(self,x,attribute, add_variance=True):
       z = self.marginalVAEs[attribute].latent(x, add_variance)
-      z = z.unsqueeze(1) #[latent_dims,1]
+      #z = z.unsqueeze(1) #[latent_dims,1] or [num_samples,1,latent_dims]
       #print("z shape in latent")
       #print(z.shape)
       return z
@@ -173,8 +176,11 @@ class VariationalAutoencoder_MRF(nn.Module):
 
     def query_single_attribute(self, x_evidence_dict, query_attribute, evidence_attributes, query_repetitions=10000):
       z_evidence_dict = {a: self.latent(torch.tensor(x_evidence_dict[a]).float(),a, add_variance=False) for a in evidence_attributes}
-      z_query = self.conditional(z_evidence_dict,evidence_attributes, query_attribute,query_repetitions)
-      return self.decode(z_query, query_attribute)
+      z_query, mu_cond, var_cond = self.conditional(z_evidence_dict,evidence_attributes, query_attribute,query_repetitions)
+      query_recon =  self.decode(z_query, query_attribute) #10k,latent_dims
+      if self.latent_dims ==2:
+        checks.graphSamples(mu_cond,var_cond,z_query,evidence_attributes,query_attribute, query_repetitions)
+      return query_recon 
       
 
 def trainVAE_MRF(VAE_MRF,attributes,df):
