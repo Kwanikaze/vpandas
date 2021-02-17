@@ -19,7 +19,7 @@ df = process.duplicate_dataframe(df, attributes, duplications=100)
 
 df= df.astype(int)
 num_samples = 500
-input_dims = {'A': 2,'B': 2}
+input_dims = {'A': 2,'B': 2} #dicts ordered
 sample1_df = df[attributes].sample(n=num_samples, random_state=args.random_seed)
 sample1_df = process.one_hot_encode_columns(sample1_df, attributes)
 print(sample1_df)
@@ -82,7 +82,7 @@ elif args.latent_dims ==3:
   ax.scatter(np_zB[:,0], np_zB[:,1], np_zB[:,2], label='zB', marker='s',color='red');
 plt.title("Latent Encodings z from A and B Marginal Encoders")
 plt.legend()
-
+plt.show()
 #___
 
 #x_test = np.eye(input_dims['A'])[np.arange(input_dims['A'])]
@@ -90,8 +90,8 @@ xA_evidence = x_test[0] #Evidence is A=0
 #xA_evidence = xA_evidence.repeat(2,1)
 print('A evidence input')
 print(xA_evidence) #need to resize/ view for single sample, or make evidence a batch repeated
-
-xB_query = VAE_MRF.query_single_attribute(x_evidence=xA_evidence, evidence_attribute = 'A', query_repetitions=10000)
+x_evidence_dict = {'A': xA_evidence}
+xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'B', evidence_attributes = ['A'], query_repetitions=10000)
 print('B query output, first 5 rows:')
 print(np.round(xB_query[0:5].cpu().detach().numpy(),decimals=2))
 
@@ -107,4 +107,3 @@ unique, counts = np.unique(indices_max.numpy(), return_counts=True)
 print(dict(zip(unique, counts)))
 
 
-print("hello")
