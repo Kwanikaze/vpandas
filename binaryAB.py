@@ -13,8 +13,8 @@ import utils.params as params
 #dict of hyperparameters
 args = params.Params('./hyperparameters/binaryAB.json')
 
-df = process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_2.csv')
-input_dims = {'A': 2,'B': 2} #dicts ordered
+df = process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_6.csv')
+input_dims = {'A': 6,'B': 6} #dicts ordered
 data2 = False
 
 attributes = list(df.columns) #assumes each attribute has a single column
@@ -110,7 +110,7 @@ unique, counts = np.unique(indices_max.numpy(), return_counts=True)
 print(dict(zip(unique, counts)))
 
 #____
-xA_evidence = x_test[9] #Evidence is A=9
+xA_evidence = x_test[5] #Evidensce is A=9
 #xA_evidence = xA_evidence.repeat(2,1)
 print('A evidence input')
 print(xA_evidence) #need to resize/ view for single sample, or make evidence a batch repeated
