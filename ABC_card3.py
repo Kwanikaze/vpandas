@@ -65,7 +65,6 @@ xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'C'
 
 #ToDO
 #Compare to ppandas
-#Query A|B
 #Query C|A,B
 #10 cardinality A,B
 #One categorical, one discrete

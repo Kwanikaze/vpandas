@@ -3,10 +3,10 @@
     "data_dir" : "./data/",
     "latent_dims" : 2, 
     "num_epochs" : 2000,
-    "batch_size" : 50,
+    "batch_size" : 100,
     "learning_rate" : 1e-2,
     "anneal_factor": 1000,
     "variational_beta" : 1,
-    "random_seed": 4
+    "random_seed": 2
 }
 
