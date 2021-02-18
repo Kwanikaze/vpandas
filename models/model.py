@@ -35,7 +35,7 @@ class VariationalAutoencoder_MRF(nn.Module):
       z_dict = {a: self.latent(x_dict[a].float(), attribute=a, add_variance=True)  for a in self.attributes} #num_samples,latent_dims
       np_z_dict = {a: z_dict[a].cpu().detach().numpy().reshape(self.num_samples,self.latent_dims) for a in self.attributes}  #num_samples,latent_dims
       z_obs = np.concatenate(tuple(np_z_dict.values()),axis=1) #(num_samples,num_attrs*latent_dims)
-      self.mu_emp = np.mean(z_obs,axis=0)
+      self.mu_emp = np.mean(z_obs,axis=0) 
       self.covar_emp = np.cov(z_obs,rowvar=False)
       ld = self.latent_dims
       #dict of tensors of mu's for each attribute
@@ -174,12 +174,27 @@ class VariationalAutoencoder_MRF(nn.Module):
 
 
     def query_single_attribute(self, x_evidence_dict, query_attribute, evidence_attributes, query_repetitions=10000):
-      z_evidence_dict = {a: self.latent(torch.tensor(x_evidence_dict[a]).float(),a, add_variance=False) for a in evidence_attributes}
+      z_evidence_dict = {a: self.latent(torch.tensor(x_evidence_dict[a]).float(),a, add_variance=False) for a in evidence_attributes}#Could be add_variance=False
       z_query, mu_cond, var_cond = self.conditional(z_evidence_dict,evidence_attributes, query_attribute,query_repetitions)
       query_recon =  self.decode(z_query, query_attribute) #10k,latent_dims
       _, recon_max_idxs = query_recon.max(dim=1)
       if self.latent_dims ==2:
         checks.graphSamples(mu_cond,var_cond,z_query,recon_max_idxs.cpu().detach().numpy(),evidence_attributes,query_attribute, query_repetitions)
+      
+      print('Evidence input')
+      print(x_evidence_dict)
+
+      #print('{} query output, first 5 rows:'.format(str(query_attribute)))
+      #print(np.round(query_recon[0:5].cpu().detach().numpy(),decimals=2))
+
+      #print('Mean of each column:')
+      #print(torch.mean(query_recon,0).detach().numpy())
+
+      #Taking max of each row and counting times each element is max
+      print("P(" + str(query_attribute) +"|" + str(evidence_attributes).lstrip('[').rstrip(']') + ")")
+      _,indices_max =query_recon.max(dim=1) 
+      unique, counts = np.unique(indices_max.numpy(), return_counts=True)
+      print(dict(zip(unique, counts)))      
       return query_recon 
       
 
@@ -190,13 +205,20 @@ def trainVAE_MRF(VAE_MRF,attributes,df):
     VAE_MRF.emp_covariance(x_dict)
     print("\nTraining MRF finished!")
 
-def vae_loss(VAE,batch_recon, batch_targets, mu, logvar):
+def vae_loss(VAE,epoch,batch_recon, batch_targets, mu, logvar):
+  #schedule starts beta at 0 increases it to 1
+  #print(anneal_factor)
+  variational_beta = VAE.variational_beta*min(1, (epoch)/(VAE.num_epochs*VAE.anneal_factor)) #annealing schedule
+  #variational_beta = VAE.variational_beta
+  #if epoch % 25 == 0:
+    #print(variational_beta)
   criterion = nn.CrossEntropyLoss()
   CE = criterion(batch_recon, batch_targets)
   #print(CE)
   KLd = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) # https://stats.stackexchange.com/questions/318748/deriving-the-kl-divergence-loss-for-vaes
   #print(KLd)
-  return CE,VAE.variational_beta*KLd, CE + VAE.variational_beta*KLd
+  #return CE,VAE.variational_beta*KLd, CE + VAE.variational_beta*KLd
+  return CE,variational_beta*KLd, CE + variational_beta*KLd
 
 #Train marginal VAE
 def trainVAE(VAE, sample1_OHE, attribute: str):
@@ -233,7 +255,7 @@ def trainVAE(VAE, sample1_OHE, attribute: str):
           #Convert x_batch from OHE vectors to single scalar
           # max returns index location of max value in each sample of batch 
           _, x_batch_targets = x_batch.max(dim=1)
-          train_CE, train_KLd, train_loss = vae_loss(VAE,batch_recon, x_batch_targets, latent_mu, latent_logvar)
+          train_CE, train_KLd, train_loss = vae_loss(VAE,epoch,batch_recon, x_batch_targets, latent_mu, latent_logvar)
           loss += train_loss.item() / N # update epoch loss
           CE += train_CE.item() / N
           KLd += train_KLd.item() / N
@@ -256,7 +278,7 @@ def trainVAE(VAE, sample1_OHE, attribute: str):
           VAE.eval()
           train_recon, train_mu, train_logvar = VAE.forward(x.float())
           _, x_targets = x.max(dim=1)
-          CE_,KLd,test_loss = vae_loss(VAE,train_recon, x_targets, train_mu, train_logvar)
+          CE_,KLd,test_loss = vae_loss(VAE,epoch,train_recon, x_targets, train_mu, train_logvar)
           print("\t CE: {:.5f}, KLd: {:.5f}, Test loss: {:.5f}".format(CE,KLd,test_loss.item()), end='')
 
   print("\nTraining marginal VAE for " + attribute+ " finished!")

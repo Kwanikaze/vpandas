@@ -13,6 +13,7 @@ class marginalVAE(nn.Module):
         self.num_samples = num_samples
         self.num_epochs = args.num_epochs
         self.batch_size = args.batch_size
+        self.anneal_factor = args.anneal_factor
         self.variational_beta = args.variational_beta
         self.fc1 = nn.Linear(input_dims, self.latent_dims)
         self.fc_mu = nn.Linear(self.latent_dims, self.latent_dims)
