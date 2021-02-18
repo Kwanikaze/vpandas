@@ -39,8 +39,6 @@ model.trainVAE_MRF(VAE_MRF,attributes,sample1_df_OHE)
 checks.graphLatentSpace(VAE_MRF,sample1_df,sample1_df_OHE,attributes,num_samples,args)
 
 x_test = np.eye(input_dims["A"])[np.arange(input_dims["A"])]  # Test data (one-hot encoded)
-if data2:
-  x_test = np.repeat(x_test, [5,5],axis=0)
 x_test = Variable(torch.from_numpy(x_test))
 x_test = x_test.to(device)
 
@@ -48,19 +46,24 @@ print("Print prediction results for A only:")
 for x in x_test:
     print("\tInput: {} \t Output: {}".format(x.cpu().detach().numpy(), np.round(VAE_MRF.forward_single_attribute(x=x.float(), attribute='A')[0].cpu().detach().numpy(),decimals=2)))
 
-print("Print prediction results for B only:")
-for x in x_test:
-    print("\tInput: {} \t Output: {}".format(x.cpu().detach().numpy(), np.round(VAE_MRF.forward_single_attribute(x=x.float(), attribute='B')[0].cpu().detach().numpy(),decimals=2)))
+#print("Print prediction results for B only:")
+x_list = np.array([0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
+x_list  = Variable(torch.from_numpy(x_list))
+x_list = x_list.to(device)
+#for x in x_list:
+#    print("\tInput: {} \t Output: {}".format(x.cpu().detach().numpy(), np.round(VAE_MRF.forward_single_attribute(x=x.float(), attribute='B')[0].cpu().detach().numpy(),decimals=2)))
 
+x_evidence_dict = {'B': x_list[1]} #Evidence is A=0
+x_evidence_dict['B'] = torch.unsqueeze(x_evidence_dict['B'],0)
+xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'A', evidence_attributes = ['B'], query_repetitions=10000)
 
-x_evidence_dict = {'A': x_test[0],'B': x_test[0]} #Evidence is A=0
-xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'C', evidence_attributes = ['A','B'], query_repetitions=10000)
+x_evidence_dict = {'B': x_list[5]} #Evidence is A=0
+x_evidence_dict['B'] = torch.unsqueeze(x_evidence_dict['B'],0)
+xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'A', evidence_attributes = ['B'], query_repetitions=10000)
 
-x_evidence_dict = {'A': x_test[1],'B': x_test[1]}
-xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'C', evidence_attributes = ['A','B'], query_repetitions=10000)
-
-x_evidence_dict = {'A': x_test[2],'B': x_test[2]}
-xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'C', evidence_attributes = ['A','B'], query_repetitions=10000)
+x_evidence_dict = {'B': x_list[9]} #Evidence is A=0
+x_evidence_dict['B'] = torch.unsqueeze(x_evidence_dict['B'],0)
+xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'A', evidence_attributes = ['B'], query_repetitions=10000)
 
 
 #ToDO
