@@ -46,11 +46,12 @@ print("Print prediction results for A only:")
 for x in x_test:
     print("\tInput: {} \t Output: {}".format(x.cpu().detach().numpy(), np.round(VAE_MRF.forward_single_attribute(x=x.float(), attribute='A')[0].cpu().detach().numpy(),decimals=2)))
 
-#print("Print prediction results for B only:")
-x_list = np.array([0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
+print("Print prediction results for B only:")
+x_list = np.array([0,0.11,0.22,0.33,0.44,0.55,0.66,0.77,0.88,0.99])
 x_list  = Variable(torch.from_numpy(x_list))
 x_list = x_list.to(device)
-#for x in x_list:
+#for xl in x_list:
+#    torch.unsqueeze(xl,0)
 #    print("\tInput: {} \t Output: {}".format(x.cpu().detach().numpy(), np.round(VAE_MRF.forward_single_attribute(x=x.float(), attribute='B')[0].cpu().detach().numpy(),decimals=2)))
 
 x_evidence_dict = {'B': x_list[1]} #Evidence is A=0

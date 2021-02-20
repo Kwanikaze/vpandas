@@ -14,13 +14,13 @@ import utils.params as params
 #dict of hyperparameters
 args = params.Params('./hyperparameters/binaryAB.json')
 
-df = process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_3.csv')
-input_dims = {'A': 3,'B': 3} #dicts ordered
+df = process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_10.csv')
+input_dims = {'A': 10,'B': 10} #dicts ordered
 data2 = False
 
 attributes = list(df.columns) #assumes each attribute has a single column
 df= df.astype(int)
-df = process.duplicate_dataframe(df, attributes, duplications=10)
+df = process.duplicate_dataframe(df, attributes, duplications=100)
 
 num_samples = int(df.shape[0])
 sample1_df = df[attributes].sample(n=num_samples, random_state=args.random_seed)
@@ -36,7 +36,7 @@ VAE_MRF.train_marginals()
 
 model.trainVAE_MRF(VAE_MRF,attributes,sample1_df_OHE)
 
-checks.graphLatentSpace(VAE_MRF,sample1_df,sample1_df_OHE,attributes,num_samples,args)
+#checks.graphLatentSpace(VAE_MRF,sample1_df,sample1_df_OHE,attributes,num_samples,args)
 
 x_test = np.eye(input_dims["A"])[np.arange(input_dims["A"])]  # Test data (one-hot encoded)
 if data2:
@@ -56,19 +56,19 @@ for x in x_test:
 x_evidence_dict = {'A': x_test[0]} #Evidence is A=0
 xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'B', evidence_attributes = ['A'], query_repetitions=10000)
 
-x_evidence_dict = {'A': x_test[1]}
-xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'B', evidence_attributes = ['A'], query_repetitions=10000)
+#x_evidence_dict = {'A': x_test[1]}
+#xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'B', evidence_attributes = ['A'], query_repetitions=10000)
 
-x_evidence_dict = {'A': x_test[2]}
+x_evidence_dict = {'A': x_test[9]}
 xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'B', evidence_attributes = ['A'], query_repetitions=10000)
 
 x_evidence_dict = {'B': x_test[0]}
 xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'A', evidence_attributes = ['B'], query_repetitions=10000)
 
-x_evidence_dict = {'B': x_test[1]}
-xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'A', evidence_attributes = ['B'], query_repetitions=10000)
+#x_evidence_dict = {'B': x_test[1]}
+#xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'A', evidence_attributes = ['B'], query_repetitions=10000)
 
-x_evidence_dict = {'B': x_test[3]}
+x_evidence_dict = {'B': x_test[9]}
 xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'A', evidence_attributes = ['B'], query_repetitions=10000)
 
 

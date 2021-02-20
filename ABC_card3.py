@@ -62,6 +62,8 @@ xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'C'
 x_evidence_dict = {'A': x_test[2],'B': x_test[2]}
 xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'C', evidence_attributes = ['A','B'], query_repetitions=10000)
 
+x_evidence_dict = {'A': x_test[0],'B': x_test[1]}
+xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'C', evidence_attributes = ['A','B'], query_repetitions=10000)
 
 #ToDO
 #Compare to ppandas
