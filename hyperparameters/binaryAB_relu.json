@@ -1,0 +1,12 @@
+{
+    "data_name" : "data_2",
+    "data_dir" : "./data/",
+    "latent_dims" : 2, 
+    "num_epochs" : 2000,
+    "batch_size" : 100,
+    "learning_rate" : 1e-2,
+    "anneal_factor": 2000,
+    "variational_beta" : 1,
+    "random_seed": 2
+}
+

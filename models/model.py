@@ -9,14 +9,20 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 from scipy.stats import multivariate_normal as mvn
 
 class VariationalAutoencoder_MRF(nn.Module):
-    def __init__(self,df,attributes, input_dims, num_samples, args):
+    def __init__(self,df,attributes, input_dims, num_samples, args,cat_vars):
         super().__init__()
         self.df = df
         self.latent_dims = args.latent_dims #later dict so latent_dim different for each attribute 
         self.input_dims = input_dims # dict # possible outcomes for each categorical attribute
         self.num_samples = num_samples
         self.attributes = attributes
-        self.marginalVAEs = {a: marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args) for a in attributes} #Dictionary of Marginal VAEs for each attribute
+        self.marginalVAEs = {} #Dictionary of Marginal VAEs for each attribute
+        for a in attributes:
+          if a in cat_vars:
+            cat_var = True
+          else:
+            cat_var = False
+          self.marginalVAEs[a] = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var) 
         self.mu_emp = {} # vector of mu's for all attributes
         self.covar_emp = {} # covariance matrix for all attributes
         self.mu_dict = {} # dict of tensors of mu's for each attribute
@@ -26,6 +32,8 @@ class VariationalAutoencoder_MRF(nn.Module):
     #Stage 1 - Train Marginal VAEs and then freeze parameters
     def train_marginals(self):
         for attribute_key in self.marginalVAEs:
+          print("THE ATTRIBUTE")
+          print(attribute_key)
           trainVAE(self.marginalVAEs[attribute_key], self.df, attribute_key)
           for param in self.marginalVAEs[attribute_key].parameters():
             param.requires_grad = False
@@ -72,7 +80,7 @@ class VariationalAutoencoder_MRF(nn.Module):
 
     # Conditional of Multivariate Gaussian
     def conditional(self, z_evidence_dict, evidence_attributes, query_attribute,query_repetitions):      
-        relevant_attributes = self.attributes.copy() #keeps order
+        relevant_attributes = self.attributes.copy() #keeps order according to input_dims
         for a in self.attributes:
           if (a not in evidence_attributes) and (a != query_attribute):
             relevant_attributes.remove(a)
@@ -205,28 +213,15 @@ def trainVAE_MRF(VAE_MRF,attributes,df):
     VAE_MRF.emp_covariance(x_dict)
     print("\nTraining MRF finished!")
 
-def vae_loss(VAE,epoch,batch_recon, batch_targets, mu, logvar):
-  #schedule starts beta at 0 increases it to 1
-  #print(anneal_factor)
-  variational_beta = VAE.variational_beta*min(1, (epoch)/(VAE.num_epochs*VAE.anneal_factor)) #annealing schedule
-  #variational_beta = VAE.variational_beta
-  #if epoch % 25 == 0:
-    #print(variational_beta)
-  criterion = nn.CrossEntropyLoss()
-  CE = criterion(batch_recon, batch_targets)
-  #print(CE)
-  KLd = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) # https://stats.stackexchange.com/questions/318748/deriving-the-kl-divergence-loss-for-vaes
-  #print(KLd)
-  #return CE,VAE.variational_beta*KLd, CE + VAE.variational_beta*KLd
-  return CE,variational_beta*KLd, CE + variational_beta*KLd
 
 #Train marginal VAE
 def trainVAE(VAE, sample1_OHE, attribute: str):
-  print("\nTraining marginal VAE for " + attribute+ " started!")
+  print("\nTraining marginal VAE for " + attribute + " started!")
   VAE.train() #set model mode to train
   optimizer = torch.optim.Adam(params = VAE.parameters(), lr = VAE.learning_rate)
   x = sample1_OHE.filter(like=attribute, axis=1).values
-  
+  print("Inside TrainVAE")
+  print(x)
   inds = list(range(x.shape[0]))
   N = VAE.num_samples
   freq = VAE.num_epochs // 10 # floor division
@@ -253,9 +248,13 @@ def trainVAE(VAE, sample1_OHE, attribute: str):
           #feed forward
           batch_recon,latent_mu,latent_logvar = VAE.forward(x_batch.float())
           #Convert x_batch from OHE vectors to single scalar
-          # max returns index location of max value in each sample of batch 
-          _, x_batch_targets = x_batch.max(dim=1)
-          train_CE, train_KLd, train_loss = vae_loss(VAE,epoch,batch_recon, x_batch_targets, latent_mu, latent_logvar)
+          # max returns index location of max value in each sample of batch
+          x_batch_targets = 0
+          if VAE.cat_var:
+            _, x_batch_targets = x_batch.max(dim=1) # indices for categorical
+          else:
+            x_batch_targets = x_batch #values for real valued
+          train_CE, train_KLd, train_loss = VAE.vae_loss(epoch,batch_recon, x_batch_targets, latent_mu, latent_logvar)
           loss += train_loss.item() / N # update epoch loss
           CE += train_CE.item() / N
           KLd += train_KLd.item() / N
@@ -278,7 +277,7 @@ def trainVAE(VAE, sample1_OHE, attribute: str):
           VAE.eval()
           train_recon, train_mu, train_logvar = VAE.forward(x.float())
           _, x_targets = x.max(dim=1)
-          CE_,KLd,test_loss = vae_loss(VAE,epoch,train_recon, x_targets, train_mu, train_logvar)
+          CE_,KLd,test_loss = VAE.vae_loss(epoch,train_recon, x_targets, train_mu, train_logvar)
           print("\t CE: {:.5f}, KLd: {:.5f}, Test loss: {:.5f}".format(CE,KLd,test_loss.item()), end='')
 
   print("\nTraining marginal VAE for " + attribute+ " finished!")

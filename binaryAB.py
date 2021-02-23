@@ -12,15 +12,14 @@ from scipy.stats import multivariate_normal
 import utils.params as params
 
 #dict of hyperparameters
-args = params.Params('./hyperparameters/binaryAB.json')
+args = params.Params('./hyperparameters/binaryAB_sigmoid.json')
 
 df = process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_3.csv')
 input_dims = {'A': 3,'B': 3} #dicts ordered
 data2 = False
 
 attributes = list(df.columns) #assumes each attribute has a single column
-df= df.astype(int)
-df = process.duplicate_dataframe(df, attributes, duplications=10)
+df = process.duplicate_dataframe(df, attributes, duplications=100)
 
 num_samples = int(df.shape[0])
 sample1_df = df[attributes].sample(n=num_samples, random_state=args.random_seed)
@@ -68,7 +67,7 @@ xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'A'
 x_evidence_dict = {'B': x_test[1]}
 xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'A', evidence_attributes = ['B'], query_repetitions=10000)
 
-x_evidence_dict = {'B': x_test[3]}
+x_evidence_dict = {'B': x_test[2]}
 xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'A', evidence_attributes = ['B'], query_repetitions=10000)
 
 

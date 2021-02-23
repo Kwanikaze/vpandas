@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import multivariate_normal as mvn
+import math
 color_dict = {'0':'blue','1':'brown','2':'red','3':'orange','4':'purple','5':'black'}
 
 def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,num_samples,args):
@@ -21,7 +22,10 @@ def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,num_samples,args):
                 if args.latent_dims==1:
                     plt.plot(np_z_dict[a], 'o', color='black',label="z"+str(a));
                 elif args.latent_dims ==2:
-                    plt.plot(np_z_dict[a][s,0],np_z_dict[a][s,1], 'o', color=color_dict[val] ,label=val);
+                    if (float(val) == math.floor(float(val))): #check if val contains a decimal, not OHE column
+                        plt.plot(np_z_dict[a][s,0],np_z_dict[a][s,1], 'o', color=color_dict[val] ,label=val);
+                    else:
+                       plt.plot(np_z_dict[a][s,0],np_z_dict[a][s,1], 'o', color='black' ,label=a); 
             if args.latent_dims ==3:
                 from mpl_toolkits.mplot3d import Axes3D
                 fig = plt.figure()
