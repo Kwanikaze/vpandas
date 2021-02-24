@@ -33,16 +33,30 @@ def one_hot_encode_columns(df,columns_to_OHE):
   df.drop(columns_to_OHE,axis=1,inplace=True)
   return df
 
-#def add_uniform_noise(df,columns):
+def unif_noise_to_real_columns(df,real_vars):
+  for col in real_vars:
+    noise = np.random.uniform(low=0.0,high=0.05,size=df[col].shape)
+    df[col] = df[col]+noise
+  return df
 
 def duplicate_dataframe(df,columns,duplications):
   df = pd.DataFrame(np.tile(df, (duplications, 1)))
   df.columns=columns
   return df
 
+def preprocessing(df_raw, attributes,args, real_vars, cat_vars, duplications=100):
+  #ToDo Standardize to 0,1
+  df = duplicate_dataframe(df_raw, attributes, duplications)
+  df = df.sample(frac=1, random_state=args.random_seed)
+  df = unif_noise_to_real_columns(df, real_vars)
+  df_OHE = one_hot_encode_columns(df, cat_vars)
+  print(df)
+  print(df_OHE)
+  return df, df_OHE
 
-#def build_OHE_train_test(file_name,df,data_dir,duplications):
-
-  #return train_df, test_df
-
+def split(df,df_OHE,split_pct):
+  train_df, val_df, test_df = np.split(df, [int(split_pct[0]*len(df)), int(split_pct[1]*len(df))])
+  train_df_OHE, val_df_OHE, test_df_OHE = np.split(df_OHE, [int(split_pct[0]*len(df_OHE)), int(split_pct[1]*len(df_OHE))])
+  print(train_df_OHE.shape,val_df_OHE.shape,test_df_OHE.shape)
+  return train_df, train_df_OHE, val_df, val_df_OHE, test_df, test_df_OHE
 
