@@ -8,7 +8,8 @@ from torch.autograd import Variable
 from torch.distributions.multivariate_normal import MultivariateNormal
 import torch.nn.functional as F
 
-from pytorchtools import EarlyStopping
+#import pytorchtools.EarlyStopping as EarlyStopping
+from .pytorchtools import EarlyStopping
 
 #Each attribute has a marginal VAE
 class marginalVAE(nn.Module):
@@ -103,7 +104,6 @@ class marginalVAE(nn.Module):
 #Train marginal VAE
 def trainVAE(VAE, train_df_OHE,val_df_OHE, attribute,args):
     VAE.update_args(args)
-    print(VAE.learning_rate)
     print("\nTraining marginal VAE for " + attribute + " started!")
     use_gpu=False
     device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
@@ -125,7 +125,7 @@ def trainVAE(VAE, train_df_OHE,val_df_OHE, attribute,args):
     val_loss_hist = []
     
     # initialize the early_stopping object
-    early_stopping = EarlyStopping(patience=patience, verbose=True)
+    early_stopping = EarlyStopping(patience=args.patience, verbose=True)
 
     for epoch in range(VAE.num_epochs):
         VAE.train()
@@ -145,7 +145,6 @@ def trainVAE(VAE, train_df_OHE,val_df_OHE, attribute,args):
             batch_recon,latent_mu,latent_logvar = VAE.forward(x_batch.float())
             #Convert x_batch from OHE vectors to single scalar
             # max returns index location of max value in each sample of batch
-            x_batch_targets = 0
             if VAE.cat_var:
                 _, x_batch_targets = x_batch.max(dim=1) # indices for categorical
             else:
@@ -165,21 +164,33 @@ def trainVAE(VAE, train_df_OHE,val_df_OHE, attribute,args):
         #Record loss per epoch        
         train_loss_hist.append(loss)
         
-        if epoch % freq == 0:
-            print('')
-            print("Epoch %d/%d\t CE: %.5f, KLd: %.5f, Train loss=%.5f" % (epoch + 1, VAE.num_epochs,CE,KLd, loss), end='\t', flush=True)
+        #if epoch % freq == 0:
+        print('')
+        print("Epoch %d/%d\t CE: %.5f, KLd: %.5f, Train loss=%.5f" % (epoch + 1, VAE.num_epochs,CE,KLd, loss), end='\t', flush=True)
 
-            #Test with all validation data
-            VAE.eval()
-            val_recon, val_mu, val_logvar = VAE.forward(val.float())          
-            val_targets = 0
-            if VAE.cat_var:
-                _, val_targets = val.max(dim=1) # indices for categorical
-            else:
-                val_targets = val  #values for real valued
-            #print(val_recon)
-            #print(val_targets)
-            CE, KLd, val_loss = VAE.vae_loss(epoch,val_recon, val_targets, val_mu, val_logvar)
-            print("\t CE: {:.5f}, KLd: {:.5f}, Validation loss: {:.5f}".format(CE, KLd, val_loss), end='')
+        #Test with all validation data
+        VAE.eval()
+        val_recon, val_mu, val_logvar = VAE.forward(val.float())          
+        if VAE.cat_var:
+            _, val_targets = val.max(dim=1) # indices for categorical
+        else:
+            val_targets = val  #values for real valued
+        #print(val_recon)
+        #print(val_targets)
+        CE, KLd, val_loss = VAE.vae_loss(epoch,val_recon, val_targets, val_mu, val_logvar)
+        
+        print("\t CE: {:.5f}, KLd: {:.5f}, Validation loss: {:.5f}".format(CE, KLd, val_loss), end='')
+        
+        # early_stopping needs the validation loss to check if it has decresed, 
+        # and if it has, it will make a checkpoint of the current model
+        early_stopping(val_loss, VAE)
 
+        if early_stopping.early_stop:
+            print("Early stopping")
+            break
     print("\nTraining marginal VAE for " + attribute+ " finished!")
+    # load the last checkpoint with the best model
+    VAE.load_state_dict(torch.load('checkpoint.pt'))
+    return VAE
+
+

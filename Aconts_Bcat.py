@@ -10,6 +10,7 @@ import torch
 from torch.autograd import Variable
 from scipy.stats import multivariate_normal
 import utils.params as params
+import sys
 
 #dict of hyperparameters
 args = params.Params('./hyperparameters/binaryAB.json')
@@ -20,7 +21,7 @@ attributes = list(df_raw.columns) #assumes each attribute has a single column
 real_vars = ['A']
 cat_vars = [x for x in attributes if x not in real_vars]
 
-df, df_OHE = process.preprocessing(df_raw, attributes,args, real_vars, cat_vars, duplications=100)
+df, df_OHE,min_max_scalar_dict = process.preprocess(df_raw,args, real_vars, cat_vars, duplications=100)
 
 #df = process.duplicate_dataframe(df_raw, attributes, duplications=100)
 #df = df[attributes].sample(frac=1, random_state=args.random_seed)
@@ -77,6 +78,7 @@ xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'B'
 #Hyperparam search
 #Early Stopping
 #Joint Training
+#Normalize train to 0,1, then apply same transformation to each test prediction
 
 #Bernoulli Likelihood
 

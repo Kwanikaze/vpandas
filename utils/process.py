@@ -8,6 +8,7 @@ from scipy.stats import multivariate_normal
 import numpy as np
 from torch.distributions.multivariate_normal import MultivariateNormal
 from numpy import genfromtxt
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import OneHotEncoder
 
@@ -39,20 +40,30 @@ def unif_noise_to_real_columns(df,real_vars):
     df[col] = df[col]+noise
   return df
 
-def duplicate_dataframe(df,columns,duplications):
-  df = pd.DataFrame(np.tile(df, (duplications, 1)))
-  df.columns=columns
+def duplicate_dataframe(df,duplications):
+  df = pd.DataFrame(np.tile(df, (duplications, 1)),columns = df.columns)
+  #df.columns=columns
   return df
 
-def preprocessing(df_raw, attributes,args, real_vars, cat_vars, duplications=100):
+
+def standarize_real_columns(df,real_vars): #Standardize to 0,1
+  mms_dict = {}
+  for col in real_vars:
+    mms_dict[col] = MinMaxScaler()
+    df[col] = mms_dict[col].fit_transform(df[col].values) #.values returns a np array
+  return df, mms_dict
+
+
+def preprocess(df_raw,args, real_vars, cat_vars, duplications=100):
   #ToDo Standardize to 0,1
-  df = duplicate_dataframe(df_raw, attributes, duplications)
+  df = duplicate_dataframe(df_raw, duplications)
   df = df.sample(frac=1, random_state=args.random_seed)
   df = unif_noise_to_real_columns(df, real_vars)
+  df, min_max_scalar_dict = standarize_real_columns(df,real_vars)
   df_OHE = one_hot_encode_columns(df, cat_vars)
   print(df)
   print(df_OHE)
-  return df, df_OHE
+  return df, df_OHE, min_max_scalar_dict
 
 def split(df,df_OHE,split_pct):
   train_df, val_df, test_df = np.split(df, [int(split_pct[0]*len(df)), int(split_pct[1]*len(df))])
