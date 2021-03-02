@@ -40,7 +40,7 @@ VAE_MRF.train_marginals(args)
 
 model.trainVAE_MRF(VAE_MRF,attributes,train_df_OHE)
 
-checks.graphLatentSpace(VAE_MRF,train_df,train_df_OHE,attributes,num_samples,args)
+checks.graphLatentSpace(VAE_MRF,train_df,train_df_OHE,attributes,num_samples,args,cat_vars)
 
 
 x_list_raw = np.array([1,11,22,33,44,55,66,77,88,99])

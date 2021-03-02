@@ -61,8 +61,8 @@ class marginalVAE(nn.Module):
             softmax = nn.Softmax(dim=1)  #normalizes reconstruction to range [0,1] and sum to 1
             return softmax(self.fc_out(z)) #recon
         else:
-            return torch.sigmoid(self.fc_out(z))
-            #return self.fc_out(z)
+            return torch.sigmoid(self.fc_out(z)) #BCE
+            #return self.fc_out(z) #MSE
     
     #Given x, returns: reconstruction x_hat, mu, log_var
     def forward(self, x):
@@ -80,21 +80,18 @@ class marginalVAE(nn.Module):
           z = self.reparameterize(mu, logvar)
           return z
 
-    def vae_loss(self, epoch,batch_recon, batch_targets, mu, logvar):
-        #schedule starts beta at 0 increases it to 1
+    def vae_loss(self, epoch, batch_recon, batch_targets, mu, logvar):
+        #schedule starts beta at 0 increases to 1
         #print(anneal_factor)
         variational_beta = self.variational_beta*min(1, epoch/(self.num_epochs*self.anneal_factor)) #annealing schedule
-        #print(batch_recon)
-        #print(batch_targets)
-        #if epoch % 25 == 0:
-            #print(variational_beta)
         if self.cat_var:
             criterion = nn.CrossEntropyLoss()
         else:
-            #criterion = nn.BCEWithLogitsLoss()
             criterion = nn.BCELoss()
-            #criterion = nn.MSELoss
+            #criterion = nn.MSELoss()
             batch_recon = batch_recon.double()
+        #print(batch_recon)
+        #print(batch_targets)
         CE = criterion(batch_recon, batch_targets)
         #print(CE)
         KLd = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) # https://stats.stackexchange.com/questions/318748/deriving-the-kl-divergence-loss-for-vaes

@@ -7,7 +7,7 @@ from scipy.stats import multivariate_normal as mvn
 import math
 color_dict = {'0':'blue','1':'brown','2':'red','3':'orange','4':'purple','5':'black'}
 
-def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,num_samples,args):
+def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,num_samples,args,cat_vars):
     if args.latent_dims > 3:
         return
     else:
@@ -22,7 +22,7 @@ def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,num_samples,args):
                 if args.latent_dims==1:
                     plt.plot(np_z_dict[a], 'o', color='black',label="z"+str(a));
                 elif args.latent_dims ==2:
-                    if (float(val) == math.floor(float(val))): #check if val contains a decimal, not OHE column
+                    if (float(val) == math.floor(float(val)) and a in cat_vars): #check if val contains a decimal, not OHE column
                         val = val.replace('.', '')
                         plt.plot(np_z_dict[a][s,0],np_z_dict[a][s,1], 'o', color=color_dict[val] ,label=val);
                     else:
