@@ -23,6 +23,7 @@ def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,num_samples,args):
                     plt.plot(np_z_dict[a], 'o', color='black',label="z"+str(a));
                 elif args.latent_dims ==2:
                     if (float(val) == math.floor(float(val))): #check if val contains a decimal, not OHE column
+                        val = val.replace('.', '')
                         plt.plot(np_z_dict[a][s,0],np_z_dict[a][s,1], 'o', color=color_dict[val] ,label=val);
                     else:
                        plt.plot(np_z_dict[a][s,0],np_z_dict[a][s,1], 'o', color='black' ,label=a); 

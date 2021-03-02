@@ -9,7 +9,7 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 from scipy.stats import multivariate_normal as mvn
 
 class VariationalAutoencoder_MRF(nn.Module):
-    def __init__(self,train_df_OHE,val_df_OHE,attributes, input_dims, num_samples, args,cat_vars):
+    def __init__(self,train_df_OHE,val_df_OHE,attributes, input_dims, num_samples, args,real_vars,cat_vars,mms_dict):
         super().__init__()
         self.train_df_OHE = train_df_OHE
         self.val_df_OHE = val_df_OHE
@@ -18,13 +18,15 @@ class VariationalAutoencoder_MRF(nn.Module):
         self.num_samples = num_samples
         self.attributes = attributes
         self.marginalVAEs = {} #Dictionary of Marginal VAEs for each attribute
+        self.real_vars = real_vars
         self.cat_vars = cat_vars
-        for a in attributes:
-          if a in self.cat_vars:
-            cat_var = True
-          else:
-            cat_var = False
-          self.marginalVAEs[a] = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var) 
+        #for a in attributes:
+        #  if a in self.cat_vars:
+        #    cat_var = True
+        #  else:
+        #    cat_var = False
+        #  self.marginalVAEs[a] = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var) 
+        self.mms_dict = mms_dict #MinMaxScalar for real vars
         self.mu_emp = {} # vector of mu's for all attributes
         self.covar_emp = {} # covariance matrix for all attributes
         self.mu_dict = {} # dict of tensors of mu's for each attribute
@@ -34,14 +36,38 @@ class VariationalAutoencoder_MRF(nn.Module):
     #Stage 1 - Train Marginal VAEs and then freeze parameters
     def train_marginals(self,args):
       learning_rates = [1e-1,1e-2,1e-3,1e-4]
-      epochs = [500,1000,1500,2000]
       batch_size = [32,64,128]
       activation = ['sigmoid','relu','leaky_relu']
-      for attribute_key in self.marginalVAEs:
-        for lr in learning_rates:
-          args.learning_rate = lr
-          marginalVAE.trainVAE(self.marginalVAEs[attribute_key], self.train_df_OHE, self.val_df_OHE, attribute_key,args)
-        for param in self.marginalVAEs[attribute_key].parameters():
+      for a in self.attributes:
+        print("\nTraining marginal VAE for " + a + " started!")
+        cat_var=False
+        if a in self.cat_vars:
+          cat_var = True
+        if args.hypertune == "True":
+          best_val_loss_min = 1e6
+          for lr in learning_rates:
+            for activ in activation:
+              for bs in batch_size:
+                args.learning_rate = lr
+                args.activation = activ
+                args.batch_size = bs
+                attribute_VAE = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var)
+                early_VAE,val_loss_min = marginalVAE.trainVAE(attribute_VAE, self.train_df_OHE, self.val_df_OHE, a, args)
+                if val_loss_min < best_val_loss_min:
+                  self.marginalVAEs[a] = early_VAE
+                  best_val_loss_min = val_loss_min
+                  print("Current Best Validation Loss")
+                  print(best_val_loss_min)
+          print("Best Validation Loss and Parameters")
+          print(best_val_loss_min)
+          print("learning rate: {}".format(self.marginalVAEs[a].learning_rate))
+          print("activation function: " + self.marginalVAEs[a].activation)
+          print("batch size: {}".format(self.marginalVAEs[a].batch_size))
+        else:
+          attribute_VAE = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var)
+          self.marginalVAEs[a],_ = marginalVAE.trainVAE(attribute_VAE, self.train_df_OHE, self.val_df_OHE, a, args)
+        print("\nTraining marginal VAE for " + a + " finished!")
+        for param in self.marginalVAEs[a].parameters():
           param.requires_grad = False
       print('Parameters for Marginal VAEs fixed')
 
@@ -184,7 +210,12 @@ class VariationalAutoencoder_MRF(nn.Module):
 
     #Given x, returns: reconstruction x_hat, mu, log_var
     def forward_single_attribute(self, x, attribute):
-      return self.marginalVAEs[attribute].forward(x)
+      q = self.marginalVAEs[attribute].forward(x)
+      if attribute in self.real_vars:
+        q = self.mms_dict[attribute].inverse_transform(q[0].reshape(1,-1))
+      else:
+        q = np.round(q[0],decimals=0)
+      return q
 
 
     def query_single_attribute(self, x_evidence_dict, query_attribute, evidence_attributes, query_repetitions=10000):

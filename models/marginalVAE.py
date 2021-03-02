@@ -31,10 +31,10 @@ class marginalVAE(nn.Module):
     
     def update_args(self, args):
         self.learning_rate = args.learning_rate
-        self.num_epochs = args.num_epochs
         self.batch_size = args.batch_size
         self.activation = args.activation
         #self.anneal_factor = args.anneal_factor
+        #self.num_epochs = args.num_epochs
 
     #accepts OHE input of an attribute, returns mu and log variance
     def encode(self, x):
@@ -83,7 +83,7 @@ class marginalVAE(nn.Module):
     def vae_loss(self, epoch,batch_recon, batch_targets, mu, logvar):
         #schedule starts beta at 0 increases it to 1
         #print(anneal_factor)
-        variational_beta = self.variational_beta*min(1, (epoch)/(self.num_epochs*self.anneal_factor)) #annealing schedule
+        variational_beta = self.variational_beta*min(1, epoch/(self.num_epochs*self.anneal_factor)) #annealing schedule
         #print(batch_recon)
         #print(batch_targets)
         #if epoch % 25 == 0:
@@ -104,7 +104,7 @@ class marginalVAE(nn.Module):
 #Train marginal VAE
 def trainVAE(VAE, train_df_OHE,val_df_OHE, attribute,args):
     VAE.update_args(args)
-    print("\nTraining marginal VAE for " + attribute + " started!")
+    #print("\nTraining marginal VAE for " + attribute + " started!")
     use_gpu=False
     device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
     VAE.train() #set model mode to train
@@ -123,10 +123,10 @@ def trainVAE(VAE, train_df_OHE,val_df_OHE, attribute,args):
 
     train_loss_hist = []
     val_loss_hist = []
+    val_loss = 0
     
     # initialize the early_stopping object
-    early_stopping = EarlyStopping(patience=args.patience, verbose=True)
-
+    early_stopping = EarlyStopping(patience=args.patience, verbose=False)
     for epoch in range(VAE.num_epochs):
         VAE.train()
         #print('epoch' + str(epoch))
@@ -165,8 +165,8 @@ def trainVAE(VAE, train_df_OHE,val_df_OHE, attribute,args):
         train_loss_hist.append(loss)
         
         #if epoch % freq == 0:
-        print('')
-        print("Epoch %d/%d\t CE: %.5f, KLd: %.5f, Train loss=%.5f" % (epoch + 1, VAE.num_epochs,CE,KLd, loss), end='\t', flush=True)
+        #print('')
+        #print("Epoch %d/%d\t CE: %.5f, KLd: %.5f, Train loss=%.5f" % (epoch + 1, VAE.num_epochs,CE,KLd, loss), end='\t', flush=True)
 
         #Test with all validation data
         VAE.eval()
@@ -178,19 +178,16 @@ def trainVAE(VAE, train_df_OHE,val_df_OHE, attribute,args):
         #print(val_recon)
         #print(val_targets)
         CE, KLd, val_loss = VAE.vae_loss(epoch,val_recon, val_targets, val_mu, val_logvar)
+        val_loss_hist.append(val_loss)
+        #print("\t CE: {:.5f}, KLd: {:.5f}, Validation loss: {:.5f}".format(CE, KLd, val_loss), end='')
         
-        print("\t CE: {:.5f}, KLd: {:.5f}, Validation loss: {:.5f}".format(CE, KLd, val_loss), end='')
-        
-        # early_stopping needs the validation loss to check if it has decresed, 
+        # early_stopping needs the validation loss to check if it has decreased, 
         # and if it has, it will make a checkpoint of the current model
         early_stopping(val_loss, VAE)
 
-        if early_stopping.early_stop:
-            print("Early stopping")
-            break
-    print("\nTraining marginal VAE for " + attribute+ " finished!")
-    # load the last checkpoint with the best model
-    VAE.load_state_dict(torch.load('checkpoint.pt'))
-    return VAE
+    #print("\nTraining marginal VAE for " + attribute+ " finished!")
 
+    VAE.load_state_dict(torch.load('checkpoint.pt'))  # load the last checkpoint with the best model
+    return VAE, float(early_stopping.val_loss_min.item())
+    #return VAE, float(val_loss.item())
 

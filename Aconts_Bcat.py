@@ -21,7 +21,7 @@ attributes = list(df_raw.columns) #assumes each attribute has a single column
 real_vars = ['A']
 cat_vars = [x for x in attributes if x not in real_vars]
 
-df, df_OHE,min_max_scalar_dict = process.preprocess(df_raw,args, real_vars, cat_vars, duplications=100)
+df, df_OHE,mms_dict = process.preprocess(df_raw,args, real_vars, cat_vars, duplications=100) #mms is min_max_scalar
 
 #df = process.duplicate_dataframe(df_raw, attributes, duplications=100)
 #df = df[attributes].sample(frac=1, random_state=args.random_seed)
@@ -34,7 +34,7 @@ num_samples = int(train_df.shape[0])
 #  use gpu if available
 use_gpu = False
 device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
-VAE_MRF = model.VariationalAutoencoder_MRF(train_df_OHE, val_df_OHE, attributes,input_dims, num_samples,args,cat_vars)
+VAE_MRF = model.VariationalAutoencoder_MRF(train_df_OHE, val_df_OHE, attributes,input_dims, num_samples,args,real_vars,cat_vars,mms_dict)
 VAE_MRF = VAE_MRF.to(device)
 VAE_MRF.train_marginals(args)
 
@@ -43,13 +43,16 @@ model.trainVAE_MRF(VAE_MRF,attributes,train_df_OHE)
 checks.graphLatentSpace(VAE_MRF,train_df,train_df_OHE,attributes,num_samples,args)
 
 
-x_list = np.array([0.01,0.11,0.22,0.33,0.44,0.55,0.66,0.77,0.88,0.99])
+x_list_raw = np.array([1,11,22,33,44,55,66,77,88,99])
+x_list = mms_dict['A'].fit_transform(x_list_raw.reshape(-1, 1))
+#print(x_list)
+
 x_list  = Variable(torch.from_numpy(x_list))
 x_list = x_list.to(device)
 print("Print prediction results for A only:")
 for x in x_list:
     x = torch.unsqueeze(x,0)
-    print("\tInput: {} \t Output: {}".format(x.cpu().detach().numpy(), np.round(VAE_MRF.forward_single_attribute(x=x.float(), attribute='A')[0].cpu().detach().numpy(), decimals=2)))
+    print("\tInput: {} \t Output: {}".format(mms_dict['A'].inverse_transform(x.cpu().detach().numpy().reshape(1,-1)), VAE_MRF.forward_single_attribute(x=x.float(), attribute='A')))
 
 x_test = np.eye(input_dims["B"])[np.arange(input_dims["B"])]  # Test data (one-hot encoded)
 x_test = Variable(torch.from_numpy(x_test))
@@ -57,7 +60,7 @@ x_test = x_test.to(device)
 print("Print prediction results for B only:")
 for x in x_test:
     print(x)
-    print("\tInput: {} \t Output: {}".format(x.cpu().detach().numpy(), np.round(VAE_MRF.forward_single_attribute(x=x.float(), attribute='B')[0].cpu().detach().numpy(), decimals=2)))
+    print("\tInput: {} \t Output: {}".format(x.cpu().detach().numpy(), VAE_MRF.forward_single_attribute(x=x.float(), attribute='B')))
 
 x_evidence_dict = {'A': x_list[1]} 
 x_evidence_dict['A'] = torch.unsqueeze(x_evidence_dict['A'],0)
@@ -75,10 +78,7 @@ xB_query = VAE_MRF.query_single_attribute(x_evidence_dict, query_attribute = 'B'
 #ToDO
 #CS230 cmd line
 #Use GPU
-#Hyperparam search
-#Early Stopping
 #Joint Training
-#Normalize train to 0,1, then apply same transformation to each test prediction
 
 #Bernoulli Likelihood
 

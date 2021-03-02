@@ -50,7 +50,7 @@ def standarize_real_columns(df,real_vars): #Standardize to 0,1
   mms_dict = {}
   for col in real_vars:
     mms_dict[col] = MinMaxScaler()
-    df[col] = mms_dict[col].fit_transform(df[col].values) #.values returns a np array
+    df[col] = mms_dict[col].fit_transform(df[col].values.reshape(-1, 1)) #.values returns a np array
   return df, mms_dict
 
 
