@@ -103,7 +103,7 @@ class marginalVAE(nn.Module):
 def trainVAE(VAE, train_df_OHE,val_df_OHE, attribute,args):
     VAE.update_args(args)
     #print("\nTraining marginal VAE for " + attribute + " started!")
-    use_gpu=True
+    use_gpu=False
     device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
     VAE.train() #set model mode to train
     optimizer = torch.optim.Adam(params = VAE.parameters(), lr = VAE.learning_rate)

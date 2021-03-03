@@ -50,8 +50,6 @@ class VariationalAutoencoder_MRF(nn.Module):
                 args.activation = activ
                 args.batch_size = bs
                 attribute_VAE = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var)
-                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-                attribute_VAE.to(device)
                 early_VAE,val_loss_min = marginalVAE.trainVAE(attribute_VAE, self.train_df_OHE, self.val_df_OHE, a, args)
                 if val_loss_min < best_val_loss_min:
                   self.marginalVAEs[a] = early_VAE
@@ -65,8 +63,6 @@ class VariationalAutoencoder_MRF(nn.Module):
           print("batch size: {}".format(self.marginalVAEs[a].batch_size))
         else:
           attribute_VAE = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var)
-          device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-          attribute_VAE.to(device)
           self.marginalVAEs[a],_ = marginalVAE.trainVAE(attribute_VAE, self.train_df_OHE, self.val_df_OHE, a, args)
         print("\nTraining marginal VAE for " + a + " finished!")
         for param in self.marginalVAEs[a].parameters():
@@ -74,7 +70,6 @@ class VariationalAutoencoder_MRF(nn.Module):
       print('Parameters for Marginal VAEs fixed')
 
     def emp_covariance(self,x_dict): #x_dict['A'].shape is num_samples, input_dims
-      device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
       z_dict = {a: self.latent(x_dict[a].float(), attribute=a, add_variance=True)  for a in self.attributes} #num_samples,latent_dims
       np_z_dict = {a: z_dict[a].cpu().detach().numpy().reshape(self.num_samples,self.latent_dims) for a in self.attributes}  #num_samples,latent_dims
       z_obs = np.concatenate(tuple(np_z_dict.values()),axis=1) #(num_samples,num_attrs*latent_dims)
@@ -83,10 +78,9 @@ class VariationalAutoencoder_MRF(nn.Module):
       ld = self.latent_dims
       #dict of tensors of mu's for each attribute
       dim_counter = 0
-      device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
       for a in self.attributes:
         self.mu_dict[a] = self.mu_emp[dim_counter : dim_counter + ld]
-        self.mu_dict[a] = torch.unsqueeze(torch.tensor(self.mu_dict[a]).to(device).float(),1) #each entry: latent_dims,1
+        self.mu_dict[a] = torch.unsqueeze(torch.tensor(self.mu_dict[a]).float(),1) #each entry: latent_dims,1
         dim_counter += ld
       
       i = 0 # row counter
@@ -94,7 +88,7 @@ class VariationalAutoencoder_MRF(nn.Module):
         j = 0 # column counter
         for b in self.attributes:
           self.covar_dict[a+b] = self.covar_emp[i:i+ld,j:j+ld]
-          self.covar_dict[a+b] = torch.tensor(self.covar_dict[a+b]).to(device).float() #each entry: latent dim, latent dim
+          self.covar_dict[a+b] = torch.tensor(self.covar_dict[a+b]).float() #each entry: latent dim, latent dim
           j += ld
         i += ld
       '''
@@ -119,7 +113,6 @@ class VariationalAutoencoder_MRF(nn.Module):
 
     # Conditional of Multivariate Gaussian
     def conditional(self, z_evidence_dict, evidence_attributes, query_attribute,query_repetitions):      
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         relevant_attributes = self.attributes.copy() #keeps order according to input_dims
         for a in self.attributes:
           if (a not in evidence_attributes) and (a != query_attribute):
@@ -132,45 +125,45 @@ class VariationalAutoencoder_MRF(nn.Module):
         for a in self.attributes:
           if a in z_evidence_dict.keys():
             evidence_tensors.append(z_evidence_dict[a]) #latent_dim,1
-        z = torch.cat(evidence_tensors,dim=0).to(device) #latent_dims*evidence_vars,1
+        z = torch.cat(evidence_tensors,dim=0) #latent_dims*evidence_vars,1
 
         #notation: https://en.wikipedia.org/wiki/Multivariate_normal_distribution#Conditional_distributions
         q = self.latent_dims
         N_minus_q = q*len(evidence_attributes)
         
-        mu1 = self.mu_dict[query_attribute].to(device)
+        mu1 = self.mu_dict[query_attribute]
         
-        mu2 = torch.empty(N_minus_q,1, device=device)
+        mu2 = torch.empty(N_minus_q,1)
         i=0
         for e in evidence_attributes:
-          mu2[i:i+q, 0:1] = self.mu_dict[e].to(device)
+          mu2[i:i+q, 0:1] = self.mu_dict[e]
           i += q
         '''
         print("mu2 shape")
         print(mu2.shape)
         print(mu2)
         '''
-        sigma11 = self.covar_dict[query_attribute+query_attribute].to(device)
+        sigma11 = self.covar_dict[query_attribute+query_attribute]
 
-        sigma22 = torch.empty(N_minus_q,N_minus_q).to(device)
+        sigma22 = torch.empty(N_minus_q,N_minus_q)
         i = 0 #row counter
         for e_i in evidence_attributes:
           j = 0 #column counter
           for e_j in evidence_attributes:
-            sigma22[i:i+q,j:j+q] = self.covar_dict[e_i + e_j].to(device) #how to backprop?
+            sigma22[i:i+q,j:j+q] = self.covar_dict[e_i + e_j] #how to backprop?
             j += q
           i += q
        
-        sigma12 = torch.empty(q, N_minus_q).to(device)
+        sigma12 = torch.empty(q, N_minus_q)
         i=0
         for e in evidence_attributes:
-          sigma12[0:q, i:i+q] = self.covar_dict[query_attribute + e].to(device)
+          sigma12[0:q, i:i+q] = self.covar_dict[query_attribute + e]
           i += q
         
-        sigma21 = torch.empty(N_minus_q, q).to(device)
+        sigma21 = torch.empty(N_minus_q, q)
         i = 0
         for e in evidence_attributes:
-          sigma21[i:i+q,0:q] = self.covar_dict[e + query_attribute].to(device)
+          sigma21[i:i+q,0:q] = self.covar_dict[e + query_attribute]
           i += q
         '''
         print("sigma11 shape")
@@ -190,14 +183,14 @@ class VariationalAutoencoder_MRF(nn.Module):
         var_cond = sigma11 - torch.matmul(torch.matmul(sigma12,torch.inverse(sigma22)),sigma21)
 
         mu_cond_T = torch.transpose(mu_cond,0,1).detach().cpu().numpy()
-        z_cond = mvn(mean=mu_cond_T[0],cov=var_cond.cpu().detach().numpy()).rvs(query_repetitions) #10k,latent_dims
+        z_cond = mvn(mean=mu_cond_T[0],cov=var_cond).rvs(query_repetitions) #10k,latent_dims
         '''
         print("mu_cond")
         print(mu_cond_T[0])
         print("var_cond")
         print(var_cond)
         '''
-        return torch.tensor(z_cond).float(), mu_cond_T[0], var_cond.cpu().detach().numpy()
+        return torch.tensor(z_cond).float(), mu_cond_T[0], var_cond
 
     #return mu, logvar
     def encode(self, x, attribute):
@@ -220,17 +213,16 @@ class VariationalAutoencoder_MRF(nn.Module):
     def forward_single_attribute(self, x, attribute):
       q = self.marginalVAEs[attribute].forward(x)
       if attribute in self.real_vars:
-        q = self.mms_dict[attribute].inverse_transform(q[0].cpu().detach().numpy().reshape(1,-1))
+        q = self.mms_dict[attribute].inverse_transform(q[0].reshape(1,-1))
       else:
-        q = np.round(q[0].cpu().detach().numpy(),decimals=2)
+        q = np.round(q[0],decimals=2)
       return q
 
 
     def query_single_attribute(self, x_evidence_dict, query_attribute, evidence_attributes, query_repetitions=10000):
-      device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-      z_evidence_dict = {a: self.latent(torch.tensor(x_evidence_dict[a]).to(device).float(),a, add_variance=False) for a in evidence_attributes}#Could be add_variance=False
+      z_evidence_dict = {a: self.latent(torch.tensor(x_evidence_dict[a]).float(),a, add_variance=False) for a in evidence_attributes}#Could be add_variance=False
       z_query, mu_cond, var_cond = self.conditional(z_evidence_dict,evidence_attributes, query_attribute,query_repetitions)
-      query_recon =  self.decode(z_query.to(device), query_attribute) #10k, input_dims of query attribute
+      query_recon =  self.decode(z_query, query_attribute) #10k, input_dims of query attribute
       _, recon_max_idxs = query_recon.max(dim=1)
       if self.latent_dims ==2 and self.graph_samples == "True":
         checks.graphSamples(mu_cond,var_cond,z_query,recon_max_idxs.cpu().detach().numpy(),evidence_attributes,query_attribute, query_repetitions,self.cat_vars)
@@ -248,7 +240,7 @@ class VariationalAutoencoder_MRF(nn.Module):
       print("P(" + str(query_attribute) +"|" + str(evidence_attributes).lstrip('[').rstrip(']') + ")")
       if query_attribute in self.cat_vars:
         _,indices_max =query_recon.max(dim=1) 
-        unique, counts = np.unique(indices_max.cpu().detach().numpy(), return_counts=True)
+        unique, counts = np.unique(indices_max.numpy(), return_counts=True)
         print(dict(zip(unique, counts)))   
       else:
         #query_recon = torch.mean(query_recon)
@@ -263,8 +255,7 @@ class VariationalAutoencoder_MRF(nn.Module):
 def trainVAE_MRF(VAE_MRF,attributes,df):
     VAE_MRF.train() #set model mode to train
     #dict where each dict key is an attribute, each dict value is a np.array without axes labels
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    x_dict = {a: Variable(torch.from_numpy(df.filter(like=a,axis=1).values)).to(device) for a in attributes}
+    x_dict = {a: Variable(torch.from_numpy(df.filter(like=a,axis=1).values)) for a in attributes}
     if VAE_MRF.emperical == "True":
       VAE_MRF.emp_covariance(x_dict)
     else:

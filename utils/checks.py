@@ -7,14 +7,13 @@ from scipy.stats import multivariate_normal as mvn
 import math
 cat_color_dict = {'0':'blue','1':'brown','2':'red','3':'orange','4':'purple','5':'black'}
 real_color_dict = {'[0,0.33]':'blue', '(0.33,0.67]':'brown', '(0.67, 1]': 'red'}
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,num_samples,args,cat_vars):
     if args.latent_dims > 3:
         return
     else:
         x_dict = {a: df.filter(like=a,axis=1).values for a in attributes}
         x_dict_OHE = {a: Variable(torch.from_numpy(df_OHE.filter(like=a,axis=1).values)) for a in attributes}
-        z_dict = {a: VAE_MRF.latent(x_dict_OHE[a].to(device).float(), attribute = a, add_variance=True) for a in attributes} 
+        z_dict = {a: VAE_MRF.latent(x_dict_OHE[a].float(), attribute = a, add_variance=True) for a in attributes} 
         np_z_dict = {a: z_dict[a].cpu().detach().numpy().reshape(num_samples,args.latent_dims) for a in attributes}  #num_samples,latent_dims
         for a in attributes:
             for s in range(0,num_samples):
@@ -55,9 +54,6 @@ def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,num_samples,args,cat_vars):
 
 
 def graphSamples(mu_cond,var_cond,z_cond,recon_max_idxs,evidence_attributes,query_attribute,query_repetitions,cat_vars):
-    mu_cond = mu_cond
-    var_cond = var_cond
-    z_cond = z_cond.cpu().detach().numpy()
     #print(z_cond)
     x, y = np.mgrid[-3:3:.01, -3:3:.01]
     pos = np.dstack((x, y))
