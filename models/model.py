@@ -75,7 +75,7 @@ class VariationalAutoencoder_MRF(nn.Module):
       z_dict = {a: self.latent(x_dict[a].float(), attribute=a, add_variance=True)  for a in self.attributes} #num_samples,latent_dims
       np_z_dict = {a: z_dict[a].cpu().detach().numpy().reshape(self.num_samples,self.latent_dims) for a in self.attributes}  #num_samples,latent_dims
       z_obs = np.concatenate(tuple(np_z_dict.values()),axis=1) #(num_samples,num_attrs*latent_dims)
-      self.mu_emp = np.mean(z_obs,axis=0) 
+      self.mu_emp = np.mean(z_obs,axis=0) #mean of each column
       self.covar_emp = np.cov(z_obs,rowvar=False)
       ld = self.latent_dims
       #dict of tensors of mu's for each attribute
