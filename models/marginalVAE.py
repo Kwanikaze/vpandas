@@ -84,6 +84,7 @@ class marginalVAE(nn.Module):
         #schedule starts beta at 0 increases to 1
         #print(anneal_factor)
         variational_beta = self.variational_beta*min(1, epoch/(self.num_epochs*self.anneal_factor)) #annealing schedule
+        #variational_beta = self.variational_beta
         if self.cat_var:
             criterion = nn.CrossEntropyLoss()
         else:

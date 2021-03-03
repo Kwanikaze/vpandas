@@ -36,13 +36,12 @@ def one_hot_encode_columns(df,columns_to_OHE):
 
 def unif_noise_to_real_columns(df,real_vars):
   for col in real_vars:
-    noise = np.random.uniform(low=0.0,high=0.05,size=df[col].shape)
+    noise = np.random.uniform(low=0.0,high=0.01,size=df[col].shape)
     df[col] = df[col]+noise
   return df
 
 def duplicate_dataframe(df,duplications):
   df = pd.DataFrame(np.tile(df, (duplications, 1)),columns = df.columns)
-  #df.columns=columns
   return df
 
 

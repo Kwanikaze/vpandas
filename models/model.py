@@ -20,23 +20,20 @@ class VariationalAutoencoder_MRF(nn.Module):
         self.marginalVAEs = {} #Dictionary of Marginal VAEs for each attribute
         self.real_vars = real_vars
         self.cat_vars = cat_vars
-        #for a in attributes:
-        #  if a in self.cat_vars:
-        #    cat_var = True
-        #  else:
-        #    cat_var = False
-        #  self.marginalVAEs[a] = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var) 
         self.mms_dict = mms_dict #MinMaxScalar for real vars
-        self.mu_emp = {} # vector of mu's for all attributes
-        self.covar_emp = {} # covariance matrix for all attributes
+        self.mu_emp = 0 # vector of mu's for all attributes
+        self.covar_emp = 0 # covariance matrix for all attributes
         self.mu_dict = {} # dict of tensors of mu's for each attribute
         self.covar_dict = {} # dict of tensors of variance for each pair of attributes
+        self.emperical = args.emperical
+        if args.emperical == "True":
+          self.covarianceAB = torch.nn.Parameter(torch.randn(size=(self.latent_dims,self.latent_dims)),requires_grad=True)
         #Need to make covarianceAB a parameter, requires_grad=True
 
     #Stage 1 - Train Marginal VAEs and then freeze parameters
     def train_marginals(self,args):
-      learning_rates = [1e-1,1e-2,1e-3,1e-4]
-      batch_size = [32,64,128]
+      learning_rates = [1,1e-1,1e-2,1e-3]
+      batch_size = [64,128]
       activation = ['sigmoid','relu','leaky_relu']
       for a in self.attributes:
         print("\nTraining marginal VAE for " + a + " started!")
@@ -56,8 +53,8 @@ class VariationalAutoencoder_MRF(nn.Module):
                 if val_loss_min < best_val_loss_min:
                   self.marginalVAEs[a] = early_VAE
                   best_val_loss_min = val_loss_min
-                  print("Current Best Validation Loss")
-                  print(best_val_loss_min)
+                  #print("Current Best Validation Loss")
+                  #print(best_val_loss_min)
           print("Best Validation Loss and Parameters")
           print(best_val_loss_min)
           print("learning rate: {}".format(self.marginalVAEs[a].learning_rate))
@@ -109,6 +106,9 @@ class VariationalAutoencoder_MRF(nn.Module):
           print(self.covar_dict[a+b])
       '''
 
+    def learned_covariance(self,x_dict):
+
+      return
 
     # Conditional of Multivariate Gaussian
     def conditional(self, z_evidence_dict, evidence_attributes, query_attribute,query_repetitions):      
@@ -189,7 +189,7 @@ class VariationalAutoencoder_MRF(nn.Module):
         print("var_cond")
         print(var_cond)
         '''
-        return torch.tensor(z_cond).float(),mu_cond_T[0],var_cond
+        return torch.tensor(z_cond).float(), mu_cond_T[0], var_cond
 
     #return mu, logvar
     def encode(self, x, attribute):
@@ -214,17 +214,17 @@ class VariationalAutoencoder_MRF(nn.Module):
       if attribute in self.real_vars:
         q = self.mms_dict[attribute].inverse_transform(q[0].reshape(1,-1))
       else:
-        q = np.round(q[0],decimals=0)
+        q = np.round(q[0],decimals=2)
       return q
 
 
     def query_single_attribute(self, x_evidence_dict, query_attribute, evidence_attributes, query_repetitions=10000):
       z_evidence_dict = {a: self.latent(torch.tensor(x_evidence_dict[a]).float(),a, add_variance=False) for a in evidence_attributes}#Could be add_variance=False
       z_query, mu_cond, var_cond = self.conditional(z_evidence_dict,evidence_attributes, query_attribute,query_repetitions)
-      query_recon =  self.decode(z_query, query_attribute) #10k,latent_dims
+      query_recon =  self.decode(z_query, query_attribute) #10k, input_dims of query attribute
       _, recon_max_idxs = query_recon.max(dim=1)
-      if self.latent_dims ==2:
-        checks.graphSamples(mu_cond,var_cond,z_query,recon_max_idxs.cpu().detach().numpy(),evidence_attributes,query_attribute, query_repetitions)
+      #if self.latent_dims ==2:
+      #  checks.graphSamples(mu_cond,var_cond,z_query,recon_max_idxs.cpu().detach().numpy(),evidence_attributes,query_attribute, query_repetitions,self.cat_vars)
       
       print('Evidence input')
       print(x_evidence_dict)
@@ -237,15 +237,24 @@ class VariationalAutoencoder_MRF(nn.Module):
 
       #Taking max of each row and counting times each element is max
       print("P(" + str(query_attribute) +"|" + str(evidence_attributes).lstrip('[').rstrip(']') + ")")
-      _,indices_max =query_recon.max(dim=1) 
-      unique, counts = np.unique(indices_max.numpy(), return_counts=True)
-      print(dict(zip(unique, counts)))      
-      return query_recon 
+      if query_attribute in self.cat_vars:
+        _,indices_max =query_recon.max(dim=1) 
+        unique, counts = np.unique(indices_max.numpy(), return_counts=True)
+        print(dict(zip(unique, counts)))   
+      else:
+        query_recon = torch.mean(query_recon)
+        query_recon = query_recon.cpu().detach().numpy()
+        query_recon = self.mms_dict[query_attribute].inverse_transform(query_recon.reshape(1, -1))
+        print(float(query_recon))
+      return query_recon
       
 
 def trainVAE_MRF(VAE_MRF,attributes,df):
     VAE_MRF.train() #set model mode to train
     #dict where each dict key is an attribute, each dict value is a np.array without axes labels
     x_dict = {a: Variable(torch.from_numpy(df.filter(like=a,axis=1).values)) for a in attributes}
-    VAE_MRF.emp_covariance(x_dict)
+    if VAE_MRF.emperical == "True":
+      VAE_MRF.emp_covariance(x_dict)
+    else:
+      VAE_MRF.learned_covariance(x_dict)
     print("\nTraining MRF finished!")
