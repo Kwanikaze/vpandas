@@ -26,6 +26,7 @@ class VariationalAutoencoder_MRF(nn.Module):
         self.mu_dict = {} # dict of tensors of mu's for each attribute
         self.covar_dict = {} # dict of tensors of variance for each pair of attributes
         self.emperical = args.emperical
+        self.graph_samples = args.graph_samples
         if args.emperical == "True":
           self.covarianceAB = torch.nn.Parameter(torch.randn(size=(self.latent_dims,self.latent_dims)),requires_grad=True)
         #Need to make covarianceAB a parameter, requires_grad=True
@@ -223,8 +224,8 @@ class VariationalAutoencoder_MRF(nn.Module):
       z_query, mu_cond, var_cond = self.conditional(z_evidence_dict,evidence_attributes, query_attribute,query_repetitions)
       query_recon =  self.decode(z_query, query_attribute) #10k, input_dims of query attribute
       _, recon_max_idxs = query_recon.max(dim=1)
-      #if self.latent_dims ==2:
-      #  checks.graphSamples(mu_cond,var_cond,z_query,recon_max_idxs.cpu().detach().numpy(),evidence_attributes,query_attribute, query_repetitions,self.cat_vars)
+      if self.latent_dims ==2 and self.graph_samples == "True":
+        checks.graphSamples(mu_cond,var_cond,z_query,recon_max_idxs.cpu().detach().numpy(),evidence_attributes,query_attribute, query_repetitions,self.cat_vars)
       
       print('Evidence input')
       print(x_evidence_dict)
@@ -242,9 +243,11 @@ class VariationalAutoencoder_MRF(nn.Module):
         unique, counts = np.unique(indices_max.numpy(), return_counts=True)
         print(dict(zip(unique, counts)))   
       else:
-        query_recon = torch.mean(query_recon)
+        #query_recon = torch.mean(query_recon)
+        #query_recon = query_recon.cpu().detach().numpy()
         query_recon = query_recon.cpu().detach().numpy()
-        query_recon = self.mms_dict[query_attribute].inverse_transform(query_recon.reshape(1, -1))
+        query_recon = self.mms_dict[query_attribute].inverse_transform(query_recon.reshape(-1, 1))
+        query_recon = np.mean(query_recon)
         print(float(query_recon))
       return query_recon
       

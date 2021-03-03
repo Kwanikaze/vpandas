@@ -15,8 +15,6 @@ def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,num_samples,args,cat_vars):
         x_dict_OHE = {a: Variable(torch.from_numpy(df_OHE.filter(like=a,axis=1).values)) for a in attributes}
         z_dict = {a: VAE_MRF.latent(x_dict_OHE[a].float(), attribute = a, add_variance=True) for a in attributes} 
         np_z_dict = {a: z_dict[a].cpu().detach().numpy().reshape(num_samples,args.latent_dims) for a in attributes}  #num_samples,latent_dims
-        print("x_dict")
-        print(x_dict)
         for a in attributes:
             for s in range(0,num_samples):
                 val = str(x_dict[a][s]).lstrip('[').rstrip(']')
@@ -69,7 +67,7 @@ def graphSamples(mu_cond,var_cond,z_cond,recon_max_idxs,evidence_attributes,quer
     for s in range(0,query_repetitions): 
         val = str(recon_max_idxs[s])
         if query_attribute in cat_vars:
-            plt.plot(z_cond[s,0],z_cond[s,1], 'o', color=color_dict[val] ,label=val);
+            plt.plot(z_cond[s,0],z_cond[s,1], 'o', color=cat_color_dict[val] ,label=val);
         else:
             plt.plot(z_cond[s,0],z_cond[s,1], 'o', color='black' ,label=query_attribute); 
         #plt.plot(z_cond[s,0],z_cond[s,1], 'o', color='black' ,label=str(query_attribute));
