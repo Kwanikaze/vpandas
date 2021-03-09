@@ -8,14 +8,12 @@
     "activation": "leaky_relu",
     "anneal_factor": 500,
     "anneal_factor_optimal": 2000,
-    "variational_beta" : 0.1,
+    "variational_beta" : 0.01,
     "patience": 20,
-    "num_runs":5,
     "random_seed": 2,
     "hypertune": "True",
     "emperical": "True",
-    "graph_samples": "True",
+    "graph_samples": "False",
     "early_stopping": "True"
-    
 }
 

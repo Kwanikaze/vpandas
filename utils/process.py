@@ -57,10 +57,10 @@ def preprocess(df_raw,args, real_vars, cat_vars, duplications=100):
   #ToDo Standardize to 0,1
   df = duplicate_dataframe(df_raw, duplications)
   df = df.sample(frac=1, random_state=args.random_seed)
+  print(df)
   df = unif_noise_to_real_columns(df, real_vars)
   df, min_max_scalar_dict = standarize_real_columns(df,real_vars)
   df_OHE = one_hot_encode_columns(df, cat_vars)
-  print(df)
   print(df_OHE)
   return df, df_OHE, min_max_scalar_dict
 

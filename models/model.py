@@ -9,33 +9,37 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 from scipy.stats import multivariate_normal as mvn
 
 class VariationalAutoencoder_MRF(nn.Module):
-    def __init__(self,train_df_OHE,val_df_OHE,attributes, input_dims, num_samples, args,real_vars,cat_vars,mms_dict):
+    def __init__(self,train_df_OHE,val_df_OHE,attributes, input_dims, args,real_vars,cat_vars,mms_dict):
         super().__init__()
         self.train_df_OHE = train_df_OHE
         self.val_df_OHE = val_df_OHE
         self.latent_dims = args.latent_dims #later dict so latent_dim different for each attribute 
         self.input_dims = input_dims # dict # possible outcomes for each categorical attribute
-        self.num_samples = num_samples
+        self.num_samples =  int(train_df_OHE.shape[0])
         self.attributes = attributes
         self.marginalVAEs = {} #Dictionary of Marginal VAEs for each attribute
         self.real_vars = real_vars
         self.cat_vars = cat_vars
         self.mms_dict = mms_dict #MinMaxScalar for real vars
+        self.num_runs = args.num_runs # Sensitive to initial parameters, take best performing model out of runs
         self.mu_emp = 0 # vector of mu's for all attributes
         self.covar_emp = 0 # covariance matrix for all attributes
         self.mu_dict = {} # dict of tensors of mu's for each attribute
         self.covar_dict = {} # dict of tensors of variance for each pair of attributes
         self.emperical = args.emperical
         self.graph_samples = args.graph_samples
-        if args.emperical == "True":
+        if args.emperical == "False":
           self.covarianceAB = torch.nn.Parameter(torch.randn(size=(self.latent_dims,self.latent_dims)),requires_grad=True)
         #Need to make covarianceAB a parameter, requires_grad=True
+  
 
     #Stage 1 - Train Marginal VAEs and then freeze parameters
     def train_marginals(self,args):
-      learning_rates = [1,1e-1,1e-2,1e-3]
-      batch_size = [64,128]
-      activation = ['sigmoid','relu','leaky_relu']
+      learning_rates = [1e-1,1e-2,1e-3]
+      batch_sizes = [128,256,512]
+      activations = ['sigmoid','relu','leaky_relu']
+      #epochs = [200,400,600,800]
+      anneal_factors = [200,400,600,800]
       for a in self.attributes:
         print("\nTraining marginal VAE for " + a + " started!")
         cat_var=False
@@ -44,23 +48,29 @@ class VariationalAutoencoder_MRF(nn.Module):
         if args.hypertune == "True":
           best_val_loss_min = 1e6
           for lr in learning_rates:
-            for activ in activation:
-              for bs in batch_size:
-                args.learning_rate = lr
-                args.activation = activ
-                args.batch_size = bs
-                attribute_VAE = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var)
-                early_VAE,val_loss_min = marginalVAE.trainVAE(attribute_VAE, self.train_df_OHE, self.val_df_OHE, a, args)
-                if val_loss_min < best_val_loss_min:
-                  self.marginalVAEs[a] = early_VAE
-                  best_val_loss_min = val_loss_min
-                  #print("Current Best Validation Loss")
-                  #print(best_val_loss_min)
+            for activ in activations:
+              for bs in batch_sizes:
+                #for ep in epochs:
+                for af in anneal_factors:
+                  args.learning_rate = lr
+                  args.activation = activ
+                  args.batch_size = bs
+                  #args.num_epochs = ep
+                  args.anneal_factor = af
+                  attribute_VAE = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var)
+                  early_VAE,val_loss_min = marginalVAE.trainVAE(attribute_VAE, self.train_df_OHE, self.val_df_OHE, a, args)
+                  if val_loss_min < best_val_loss_min:
+                    self.marginalVAEs[a] = early_VAE
+                    best_val_loss_min = val_loss_min
+                    #print("Current Best Validation Loss")
+                    #print(best_val_loss_min)
           print("Best Validation Loss and Parameters")
           print(best_val_loss_min)
           print("learning rate: {}".format(self.marginalVAEs[a].learning_rate))
           print("activation function: " + self.marginalVAEs[a].activation)
           print("batch size: {}".format(self.marginalVAEs[a].batch_size))
+          #print("num epochs: {}".format(self.marginalVAEs[a].num_epochs))
+          print("anneal factor: {}".format(self.marginalVAEs[a].anneal_factor))
         else:
           attribute_VAE = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var)
           self.marginalVAEs[a],_ = marginalVAE.trainVAE(attribute_VAE, self.train_df_OHE, self.val_df_OHE, a, args)
@@ -251,13 +261,14 @@ class VariationalAutoencoder_MRF(nn.Module):
         print(float(query_recon))
       return query_recon
       
+def trainVAE_MRF(VAE_MRF,attributes,df,args):
+  VAE_MRF.train() #set model mode to train
+  #dict where each dict key is an attribute, each dict value is a np.array without axes labels
+  x_dict = {a: Variable(torch.from_numpy(df.filter(like=a,axis=1).values)) for a in attributes}
+  if VAE_MRF.emperical == "True":
+    VAE_MRF.train_marginals(args)
+    VAE_MRF.emp_covariance(x_dict)
+  else:
+    VAE_MRF.learned_covariance(x_dict)
+  print("\nTraining MRF finished!")
 
-def trainVAE_MRF(VAE_MRF,attributes,df):
-    VAE_MRF.train() #set model mode to train
-    #dict where each dict key is an attribute, each dict value is a np.array without axes labels
-    x_dict = {a: Variable(torch.from_numpy(df.filter(like=a,axis=1).values)) for a in attributes}
-    if VAE_MRF.emperical == "True":
-      VAE_MRF.emp_covariance(x_dict)
-    else:
-      VAE_MRF.learned_covariance(x_dict)
-    print("\nTraining MRF finished!")

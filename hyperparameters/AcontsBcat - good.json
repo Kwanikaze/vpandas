@@ -2,20 +2,18 @@
     "data_name" : "data_2",
     "data_dir" : "./data/",
     "latent_dims" : 2, 
-    "num_epochs" : 500,
+    "num_epochs" : 2000,
     "batch_size" : 128,
     "learning_rate" : 1e-1,
     "activation": "leaky_relu",
-    "anneal_factor": 500,
+    "anneal_factor": 2000,
     "anneal_factor_optimal": 2000,
     "variational_beta" : 0.1,
     "patience": 20,
-    "num_runs":5,
     "random_seed": 2,
     "hypertune": "True",
     "emperical": "True",
     "graph_samples": "True",
-    "early_stopping": "True"
-    
+    "early_stopping": "False"
 }
 

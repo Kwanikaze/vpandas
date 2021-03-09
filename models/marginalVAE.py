@@ -24,17 +24,21 @@ class marginalVAE(nn.Module):
         self.anneal_factor = args.anneal_factor
         self.variational_beta = args.variational_beta
         self.activation = args.activation
+        self.early_stopping = args.early_stopping
         self.fc1 = nn.Linear(input_dims, self.latent_dims)
         self.fc_mu = nn.Linear(self.latent_dims, self.latent_dims)
         self.fc_logvar = nn.Linear(self.latent_dims, self.latent_dims)
+        #self.fc1 = nn.Linear(input_dims, 50)
+        #self.fc_mu = nn.Linear(50, self.latent_dims)
+        #self.fc_logvar = nn.Linear(50, self.latent_dims)
         self.fc_out = nn.Linear(self.latent_dims,input_dims)
     
     def update_args(self, args):
         self.learning_rate = args.learning_rate
         self.batch_size = args.batch_size
         self.activation = args.activation
-        #self.anneal_factor = args.anneal_factor
-        #self.num_epochs = args.num_epochs
+        self.anneal_factor = args.anneal_factor
+        self.num_epochs = args.num_epochs
 
     #accepts OHE input of an attribute, returns mu and log variance
     def encode(self, x):
@@ -182,10 +186,13 @@ def trainVAE(VAE, train_df_OHE,val_df_OHE, attribute,args):
         # early_stopping needs the validation loss to check if it has decreased, 
         # and if it has, it will make a checkpoint of the current model
         early_stopping(val_loss, VAE)
-
+        if VAE.early_stopping =="True" and early_stopping.early_stop:
+            #print("Early stopping")
+            break
     #print("\nTraining marginal VAE for " + attribute+ " finished!")
-
-    VAE.load_state_dict(torch.load('checkpoint.pt'))  # load the last checkpoint with the best model
-    return VAE, float(early_stopping.val_loss_min.item())
-    #return VAE, float(val_loss.item())
+    if VAE.early_stopping == "True":
+        VAE.load_state_dict(torch.load('checkpoint.pt'))  # load the last checkpoint with the best model
+        return VAE, float(early_stopping.val_loss_min.item())
+    else:
+        return VAE, float(val_loss.item())
 
