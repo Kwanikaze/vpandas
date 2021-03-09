@@ -15,7 +15,8 @@
     "hypertune": "True",
     "emperical": "True",
     "graph_samples": "True",
-    "early_stopping": "True"
+    "early_stopping": "True",
+    "add_noise": "True"
     
 }
 

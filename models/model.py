@@ -39,7 +39,7 @@ class VariationalAutoencoder_MRF(nn.Module):
       batch_sizes = [128,256,512]
       activations = ['sigmoid','relu','leaky_relu']
       #epochs = [200,400,600,800]
-      anneal_factors = [200,400,600,800]
+      anneal_factors = [800]
       for a in self.attributes:
         print("\nTraining marginal VAE for " + a + " started!")
         cat_var=False

@@ -20,7 +20,7 @@ attributes = list(df_raw.columns) #assumes each attribute has a single column
 real_vars = ['A']
 cat_vars = [x for x in attributes if x not in real_vars]
 
-df, df_OHE,mms_dict = process.preprocess(df_raw,args, real_vars, cat_vars, duplications=100) #mms is min_max_scalar
+df, df_OHE,mms_dict = process.preprocess(df_raw,args, real_vars, cat_vars, duplications=200) #mms is min_max_scalar
 
 train_df, train_df_OHE, val_df, val_df_OHE, test_df, test_df_OHE = process.split(df,df_OHE,[0.7,0.85])
 

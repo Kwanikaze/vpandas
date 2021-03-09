@@ -23,13 +23,14 @@ def label_encode_columns(df,columns):
     df[col] = labelencoder.fit_transform(df[col])
   return df
 
-def one_hot_encode_columns(df,columns_to_OHE):
+def one_hot_encode_columns(df,columns_to_OHE,args):
   df[columns_to_OHE]= df[columns_to_OHE].astype(int)
   for col in columns_to_OHE:
     col_OHE = pd.get_dummies(prefix = col,data= df[col])
     #Generate Unif[0,1] noise with the same dimension as col_OHE
-    noise = np.random.uniform(low=0.0,high=1.0,size=col_OHE.shape)
-    col_OHE = col_OHE + noise
+    if args.add_noise == "True":
+      noise = np.random.uniform(low=0.0,high=1.0,size=col_OHE.shape)
+      col_OHE = col_OHE + noise
     df = df.join(col_OHE)
   df.drop(columns_to_OHE,axis=1,inplace=True)
   return df
@@ -58,9 +59,10 @@ def preprocess(df_raw,args, real_vars, cat_vars, duplications=100):
   df = duplicate_dataframe(df_raw, duplications)
   df = df.sample(frac=1, random_state=args.random_seed)
   print(df)
-  df = unif_noise_to_real_columns(df, real_vars)
+  if args.add_noise == "True":
+    df = unif_noise_to_real_columns(df, real_vars)
   df, min_max_scalar_dict = standarize_real_columns(df,real_vars)
-  df_OHE = one_hot_encode_columns(df, cat_vars)
+  df_OHE = one_hot_encode_columns(df, cat_vars, args)
   print(df_OHE)
   return df, df_OHE, min_max_scalar_dict
 
