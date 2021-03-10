@@ -13,7 +13,7 @@ from .pytorchtools import EarlyStopping
 
 #Each attribute has a marginal VAE
 class marginalVAE(nn.Module):
-    def __init__(self,input_dims,num_samples, args, cat_var):
+    def __init__(self, input_dims,num_samples, args, cat_var):
         super().__init__()
         self.cat_var = cat_var #True or False
         self.latent_dims = args.latent_dims
@@ -39,6 +39,7 @@ class marginalVAE(nn.Module):
         self.activation = args.activation
         self.anneal_factor = args.anneal_factor
         self.num_epochs = args.num_epochs
+        self.variational_beta = args.variational_beta
 
     #accepts OHE input of an attribute, returns mu and log variance
     def encode(self, x):
@@ -152,9 +153,9 @@ def trainVAE(VAE, train_df_OHE,val_df_OHE, attribute,args):
             else:
                 x_batch_targets = x_batch  #values for real valued
             train_CE, train_KLd, train_loss = VAE.vae_loss(epoch,batch_recon, x_batch_targets, latent_mu, latent_logvar)
-            loss += train_loss.item() / N # update epoch loss
-            CE += train_CE.item() / N
-            KLd += train_KLd.item() / N
+            loss += train_loss.item() / VAE.batch_size # update epoch loss
+            CE += train_CE.item() / VAE.batch_size
+            KLd += train_KLd.item() / VAE.batch_size
 
             #Backprop the error, compute the gradient
             optimizer.zero_grad()

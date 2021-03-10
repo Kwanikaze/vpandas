@@ -35,11 +35,11 @@ class VariationalAutoencoder_MRF(nn.Module):
 
     #Stage 1 - Train Marginal VAEs and then freeze parameters
     def train_marginals(self,args):
-      learning_rates = [1e-1,1e-2,1e-3]
+      learning_rates = [1,1e-1,1e-2,1e-3,1e-4]
       batch_sizes = [128,256,512]
       activations = ['sigmoid','relu','leaky_relu']
       #epochs = [200,400,600,800]
-      anneal_factors = [800]
+      anneal_factors = [25,50,75,100]
       for a in self.attributes:
         print("\nTraining marginal VAE for " + a + " started!")
         cat_var=False
@@ -57,7 +57,7 @@ class VariationalAutoencoder_MRF(nn.Module):
                   args.batch_size = bs
                   #args.num_epochs = ep
                   args.anneal_factor = af
-                  attribute_VAE = marginalVAE.marginalVAE(self.input_dims[a], self.latent_dims, args, cat_var)
+                  attribute_VAE = marginalVAE.marginalVAE(self.input_dims[a], self.num_samples, args, cat_var)
                   early_VAE,val_loss_min = marginalVAE.trainVAE(attribute_VAE, self.train_df_OHE, self.val_df_OHE, a, args)
                   if val_loss_min < best_val_loss_min:
                     self.marginalVAEs[a] = early_VAE

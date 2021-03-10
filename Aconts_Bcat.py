@@ -1,6 +1,7 @@
 import utils.process as process
 import utils.checks as checks
-import models.model as model
+#import models.model as model
+import models.joint_model as model
 
 import numpy as np
 import pandas as pd
