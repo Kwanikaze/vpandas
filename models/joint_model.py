@@ -7,7 +7,6 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 #from scipy.stats import multivariate_normal as mvn
 from .pytorchtools import EarlyStopping
-from tqdm import tqdm
 
 def trainVAE_MRF(VAE_MRF,attributes,train_df_OHE, args):
     use_gpu=False
@@ -73,6 +72,7 @@ def trainVAE_MRF(VAE_MRF,attributes,train_df_OHE, args):
             loss[a]=0
             CE[a]=0
             KLd[a]=0
+        train_loss = 0
         for b in range(0, N, VAE_MRF.batch_size):
             x_batch_dict, x_batch_recon_dict, latent_mu_dict, latent_logvar_dict, x_batch_targets_dict,train_CE_dict,train_KLd_dict,train_loss_dict,z_evidence_dict = {},{},{},{},{},{},{},{},{}
             for a in VAE_MRF.attributes:
@@ -96,28 +96,40 @@ def trainVAE_MRF(VAE_MRF,attributes,train_df_OHE, args):
             for query_attribute in VAE_MRF.attributes:
                 #x_batch_cond_recon = VAE_MRF.conditional(z_evidence_dict,latent_mu_dict,latent_logvar_dict,query_attribute)
                 x_batch_cond_recon = VAE_MRF.conditional(z_evidence_dict,mu_dict,var_dict,query_attribute)
-                train_loss_dict[str(query_attribute) + "cond"] = VAE_MRF.recon_loss(x_batch_cond_recon, x_batch_targets_dict[query_attribute], query_attribute) / VAE_MRF.batch_size
-            
+                #print(VAE_MRF.recon_loss(x_batch_cond_recon, x_batch_targets_dict[query_attribute], query_attribute))
+                train_loss_dict[str(query_attribute) + "cond"] = VAE_MRF.recon_loss(x_batch_cond_recon, x_batch_targets_dict[query_attribute], query_attribute) #/ VAE_MRF.batch_size
+            """
             optimizer.zero_grad()
-            train_loss = 0
-            aa = list(VAE_MRF.parameters())[0].clone()
-            for k in train_loss_dict.keys():
-                train_loss += train_loss_dict[k]
-                #print(k)
-                #print(train_loss_dict[k])
-            train_loss.backward()   #Backprop the error, compute the gradient
-            optimizer.step()        #update parameters based on gradient
-            
-            bb = list(VAE_MRF.parameters())[0].clone()
+            for k in attributes:
+                train_loss_dict[k].backward()
+            optimizer.step()
+            optimizer.zero_grad()
+            for k in ["Acond","Bcond"]:
+                print(k)
+                train_loss_dict[k].backward()
+            optimizer.step()
+            #aa = list(VAE_MRF.parameters())[-1].clone()
+            """
+            with torch.autograd.set_detect_anomaly(True):
+                for k in train_loss_dict.keys():
+                    print(k)
+                    train_loss_dict[k].backward(retain_graph=True)
+                    train_loss += train_loss_dict[k]
+                    #print(train_loss_dict[k])
+                #train_loss.backward(retain_graph=True)  #Backprop the error, compute the gradient
+                optimizer.step()        #update parameters based on gradient
+
+            #bb = list(VAE_MRF.parameters())[-1].clone()
             #print(bb)
             #print(torch.equal(aa.data, bb.data))
+        
         #for a in VAE_MRF.attributes:
         #    print("Attribute: %s, Epoch %d/%d\t CE: %.5f, KLd: %.5f, Train loss=%.5f" % (a, epoch + 1, VAE_MRF.num_epochs, CE[a], KLd[a], loss[a]), end='\n', flush=True)
         #    print("%s_cond_recon loss: %.5f" % (a,train_loss_dict[str(a) + "cond"]), end='\n', flush=True)
         print("Total Train Loss: %.5f" % (train_loss), end='\n', flush=True)
-        print(VAE_MRF.covar_dict.items())
+        #print(VAE_MRF.covar_dict.items())
 
-
+    print(list(VAE_MRF.parameters()))
     #VAE_MRF.joint_training(args)
     print("\nTraining MRF finished!")
 
@@ -144,9 +156,9 @@ class VariationalAutoencoder_MRF(nn.Module):
         self.mms_dict = mms_dict #MinMaxScalar for real vars
         self.num_runs = args.num_runs # Sensitive to initial parameters, take best performing model out of runs
         self.graph_samples = args.graph_samples
-        self.covar_dict = {}
+        #self.covar_dict = {}
         #self.covar_dict['A'+'B'] = torch.nn.Parameter(torch.zeros(size=(self.latent_dims,self.latent_dims))+0.1,requires_grad=True)
-        self.covar_dict = nn.ParameterDict({'A'+'B': nn.Parameter(torch.zeros(size=(self.latent_dims,self.latent_dims))+0.1,requires_grad=True) }) 
+        self.covar_dict = nn.ParameterDict({'A'+'B': nn.Parameter(torch.rand(size=(self.latent_dims,self.latent_dims))/100,requires_grad=True) }) 
         #self.covar_dict['A'+'B'] = torch.nn.Parameter(torch.zeros(size=(10,10))+0.1,requires_grad=True)
     
     #Query attribute's mu is 0, logvar is 1
@@ -166,7 +178,7 @@ class VariationalAutoencoder_MRF(nn.Module):
 
         mu1 = torch.zeros(q,1) #standard normal prior
         
-        mu2 = torch.zeros(N_minus_q,1)
+        mu2 = torch.empty(N_minus_q,1)
         i=0
         for e in evidence_attributes:
             mu2[i:i+q, 0:1] = mu_dict[e]
@@ -176,7 +188,7 @@ class VariationalAutoencoder_MRF(nn.Module):
         print(mu2)
         """
         sigma11 = torch.diag(torch.ones(q)) #standard normal prior
-        sigma22 = torch.zeros(N_minus_q,N_minus_q)
+        sigma22 = torch.empty(N_minus_q,N_minus_q)
 
         i=0
         for e in evidence_attributes:
@@ -206,6 +218,7 @@ class VariationalAutoencoder_MRF(nn.Module):
         print(sigma21)
         """
         var_cond = sigma11 - torch.matmul(torch.matmul(sigma12,torch.inverse(sigma22)),sigma21) #latent_dims*evidence_vars,latent_dims*evidence_vars
+        #inplace operation 2x2
         mu_cond_T = torch.transpose(mu_cond,0,1)
 
         """
@@ -214,7 +227,6 @@ class VariationalAutoencoder_MRF(nn.Module):
         print(mu_cond_T[1])
         print(var_cond)
         """
-        query_repetitions = 1 #increase and take average?
 
         z_cond = self.multivariate_reparameterize(mu_cond_T, var_cond) 
         #print(z_cond.shape)
@@ -227,15 +239,15 @@ class VariationalAutoencoder_MRF(nn.Module):
         #    """
         #    z_cond[b,0:self.latent_dims] = self.multivariate_reparameterize(mu_cond_T[b], var_cond) 
 
-        x_query_batch_cond_recon = self.decode(torch.tensor(z_cond).float(), query_attribute)
+        x_query_batch_cond_recon = self.decode(z_cond, query_attribute)
         return x_query_batch_cond_recon
 
     def multivariate_reparameterize(self,mu,covariance):
         #cholesky factor L, covariance = L L^T
         L = torch.cholesky(covariance)
         #L = L.repeat(1,mu.shape[0]/2)
-        eps = torch.randn_like(mu)
-        return mu + torch.matmul(eps, L)
+        eps = torch.randn_like(mu) #batch_size, latent_dims
+        return mu + torch.matmul(eps, L) #256x2 by 2x2
     
     def update_args(self, args):
         self.learning_rate = args.learning_rate
