@@ -8,6 +8,7 @@ from torch.autograd import Variable
 #from scipy.stats import multivariate_normal as mvn
 from .pytorchtools import EarlyStopping
 
+
 def trainVAE_MRF(VAE_MRF,attributes,train_df_OHE, args):
     use_gpu=False
     device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
@@ -17,14 +18,14 @@ def trainVAE_MRF(VAE_MRF,attributes,train_df_OHE, args):
     x_train_dict = {a: Variable(torch.from_numpy(VAE_MRF.train_df_OHE.filter(like=a,axis=1).values)).to(device) for a in attributes}
     
     #take population mean and variance for each attribute
-    mu_dict,logvar_dict,var_dict = {}, {}, {}
+    mu_dict,mu_dict_batch,logvar_dict,var_dict,logvar_dict_mean = {}, {}, {}, {}, {}
     for a in attributes:
-        mu_dict[a],logvar_dict[a] = VAE_MRF.encode(x_train_dict[a].float(),attribute=a) #train samples,latent_dims
-        mu_dict[a] = torch.mean(mu_dict[a],0) #latent_dims
-        logvar_dict[a] = torch.mean(logvar_dict[a],0) #take mean of logvar correct?
+        mu_dict_batch[a],logvar_dict[a] = VAE_MRF.encode(x_train_dict[a].float(),attribute=a) #train samples,latent_dims
+        mu_dict[a] = torch.mean(mu_dict_batch[a],0) #latent_dims
         mu_dict[a] = mu_dict[a].unsqueeze(1) #latent_dims, 1
-        logvar_dict[a] = logvar_dict[a] #latent_dims
-        var_dict[a] = torch.exp(logvar_dict[a])
+        logvar_dict_mean[a] = torch.mean(logvar_dict[a],0) #take mean of logvar correct?
+        #logvar_dict[a] = logvar_dict[a] #latent_dims
+        var_dict[a] = torch.exp(logvar_dict_mean[a])
     """
     print(mu_dict['A'].shape)
     print("muA avg")
@@ -83,12 +84,14 @@ def trainVAE_MRF(VAE_MRF,attributes,train_df_OHE, args):
                     x_batch_targets_dict[a] = x_batch_dict[a]  #values for real valued
             
                 x_batch_recon_dict[a],latent_mu_dict[a],latent_logvar_dict[a] = VAE_MRF.forward(x_batch_dict[a].float(),attribute=a)
-                #Marginal VAE loss for each attribute: recon_loss+KLd
-                train_CE_dict[a], train_KLd_dict[a], train_loss_dict[a] = VAE_MRF.vae_loss(epoch, x_batch_recon_dict[a], x_batch_targets_dict[a], latent_mu_dict[a], latent_logvar_dict[a], attribute=a)
                 
+                #Marginal VAE loss for each attribute: recon_loss+KLd
+                train_CE_dict[a], train_KLd_dict[a], train_loss_dict[a] = VAE_MRF.vae_loss(epoch, x_batch_recon_dict[a], x_batch_targets_dict[a], latent_mu_dict[a], latent_logvar_dict[a], attribute=a) 
+                train_loss_dict[a] = train_loss_dict[a] / VAE_MRF.batch_size
                 loss[a] += train_loss_dict[a].item() / VAE_MRF.batch_size # update epoch loss
                 CE[a] += train_CE_dict[a].item() / VAE_MRF.batch_size
                 KLd[a] += train_KLd_dict[a].item() / VAE_MRF.batch_size
+                
             #z_evidence_dict[a] = VAE_MRF.latent(x_batch_dict[a].float(), a, add_variance=False) #same as mu!
             z_evidence_dict = latent_mu_dict #batch_size, latent_dims
 
@@ -97,7 +100,7 @@ def trainVAE_MRF(VAE_MRF,attributes,train_df_OHE, args):
                 #x_batch_cond_recon = VAE_MRF.conditional(z_evidence_dict,latent_mu_dict,latent_logvar_dict,query_attribute)
                 x_batch_cond_recon = VAE_MRF.conditional(z_evidence_dict,mu_dict,var_dict,query_attribute)
                 #print(VAE_MRF.recon_loss(x_batch_cond_recon, x_batch_targets_dict[query_attribute], query_attribute))
-                train_loss_dict[str(query_attribute) + "cond"] = VAE_MRF.recon_loss(x_batch_cond_recon, x_batch_targets_dict[query_attribute], query_attribute) #/ VAE_MRF.batch_size
+                train_loss_dict[str(query_attribute) + "cond"] = VAE_MRF.recon_loss(x_batch_cond_recon, x_batch_targets_dict[query_attribute], query_attribute) / VAE_MRF.batch_size
             """
             optimizer.zero_grad()
             for k in attributes:
@@ -113,12 +116,13 @@ def trainVAE_MRF(VAE_MRF,attributes,train_df_OHE, args):
             with torch.autograd.set_detect_anomaly(True):
                 for k in train_loss_dict.keys():
                     print(k)
+                    optimizer.zero_grad()
                     train_loss_dict[k].backward(retain_graph=True)
                     train_loss += train_loss_dict[k]
                     #print(train_loss_dict[k])
                 #train_loss.backward(retain_graph=True)  #Backprop the error, compute the gradient
                 optimizer.step()        #update parameters based on gradient
-
+            print(VAE_MRF.covar_dict.items())
             #bb = list(VAE_MRF.parameters())[-1].clone()
             #print(bb)
             #print(torch.equal(aa.data, bb.data))
@@ -158,7 +162,7 @@ class VariationalAutoencoder_MRF(nn.Module):
         self.graph_samples = args.graph_samples
         #self.covar_dict = {}
         #self.covar_dict['A'+'B'] = torch.nn.Parameter(torch.zeros(size=(self.latent_dims,self.latent_dims))+0.1,requires_grad=True)
-        self.covar_dict = nn.ParameterDict({'A'+'B': nn.Parameter(torch.rand(size=(self.latent_dims,self.latent_dims))/100,requires_grad=True) }) 
+        self.covar_dict = nn.ParameterDict({'A'+'B': nn.Parameter(torch.rand(size=(self.latent_dims,self.latent_dims))/100,requires_grad=True) })
         #self.covar_dict['A'+'B'] = torch.nn.Parameter(torch.zeros(size=(10,10))+0.1,requires_grad=True)
     
     #Query attribute's mu is 0, logvar is 1
@@ -178,36 +182,42 @@ class VariationalAutoencoder_MRF(nn.Module):
 
         mu1 = torch.zeros(q,1) #standard normal prior
         
-        mu2 = torch.empty(N_minus_q,1)
-        i=0
+        mu2_vectors = []
         for e in evidence_attributes:
-            mu2[i:i+q, 0:1] = mu_dict[e]
-            i += q
-        """
-            print(mu_dict[e])
-        print(mu2)
-        """
-        sigma11 = torch.diag(torch.ones(q)) #standard normal prior
-        sigma22 = torch.empty(N_minus_q,N_minus_q)
+            mu2_vectors.append(mu_dict[e].detach()) # detach no error
+        mu2 = torch.cat(mu2_vectors,axis=0)
 
-        i=0
+
+        sigma11 = torch.diag(torch.ones(q)) #standard normal prior
+        
+        sigma22_vectors = []
         for e in evidence_attributes:
-            sigma22[i:i+q, i:i+q] = torch.diag(var_dict[e])
-            i += q
+            sigma22_vectors.append(var_dict[e].detach())
+        sigma22_diag = torch.cat(sigma22_vectors, axis=0)
+        sigma22 = torch.diag(sigma22_diag)
+
         """
-            print(var_dict[e])
-            print(torch.diag(var_dict[e]))
+        print(var_dict[e])
+        print(torch.diag(var_dict[e]))
         print(sigma22)
         """
 
-        sigma12 = torch.empty(q, N_minus_q)
-        i=0
+
+        sigma12_vectors = []
         for e in evidence_attributes:
             if str(query_attribute + e) in self.covar_dict.keys():
-                sigma12[0:q, i:i+q] = self.covar_dict[query_attribute + e] #'A'+'B'
-            else: #'B'+'A'
-                sigma12[0:q, i:i+q] = torch.transpose(self.covar_dict[e + query_attribute],0,1) # 'A'+'B'
-            i += q
+                sigma12_vectors.append(self.covar_dict[query_attribute + e])
+            else:
+                sigma12_vectors.append(torch.transpose(self.covar_dict[e + query_attribute],0,1))
+        sigma12 = torch.cat(sigma12_vectors, axis=1)
+
+        #i=0
+        #for e in evidence_attributes:
+        #    if str(query_attribute + e) in self.covar_dict.keys():
+        #        sigma12[0:q, i:i+q] = self.covar_dict[query_attribute + e] #'A'+'B'
+        #    else: #'B'+'A'
+        #        sigma12[0:q, i:i+q] = torch.transpose(self.covar_dict[e + query_attribute],0,1) # 'A'+'B'
+        #    i += q
         
         sigma21 = torch.transpose(sigma12,0,1)
         mu_cond = mu1 + torch.matmul(torch.matmul(sigma12,torch.inverse(sigma22)), (z-mu2))
@@ -275,7 +285,7 @@ class VariationalAutoencoder_MRF(nn.Module):
     
     #Decodes latent z into reconstruction with dimension equal to num
     def decode(self, z,attribute): #z is size [batch_size,latent_dims]
-        if z.size()[0] == self.latent_dims: #resize from [3] to [1,3]
+        if z.size()[0] == self.latent_dims: #resize from [latent_dims] to [1,latent_dims]
             if len(z.size()) == 1:
                 z = z.view(1, self.latent_dims)
         if attribute in self.cat_vars:
