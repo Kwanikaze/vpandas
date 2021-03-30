@@ -2,7 +2,7 @@
     "data_name" : "data_2",
     "data_dir" : "./data/",
     "latent_dims" : 2, 
-    "num_epochs" : 10,
+    "num_epochs" : 100,
     "num_epochs_optimal" : 500,
     "batch_size" : 256,
     "learning_rate" : 1e-1,
