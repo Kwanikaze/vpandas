@@ -1,5 +1,6 @@
 import utils.process as process
 import utils.checks as checks
+import utils.trainer as trainer
 #import models.model as model
 import models.joint_model as model
 
@@ -30,7 +31,7 @@ use_gpu = False
 device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
 VAE_MRF = model.VariationalAutoencoder_MRF(train_df_OHE, val_df_OHE, attributes,input_dims, args,real_vars,cat_vars,mms_dict)
 VAE_MRF = VAE_MRF.to(device)
-model.trainVAE_MRF(VAE_MRF,attributes,train_df_OHE,args)
+trainer.trainVAE_MRF(VAE_MRF,attributes,train_df_OHE,args)
 
 checks.graphLatentSpace(VAE_MRF,train_df,train_df_OHE,attributes,args,cat_vars)
 
