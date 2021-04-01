@@ -31,8 +31,8 @@ class VariationalAutoencoder_MRF(nn.Module):
         self.covar_dict = nn.ParameterDict({'A'+'B': nn.Parameter(torch.rand(size=(self.latent_dims,self.latent_dims))/100,requires_grad=True) })
     
     #Query attribute's mu is 0, logvar is 1
-    def conditional(self, z_evidence_dict, mu_dict, var_dict, query_attribute):
-        evidence_attributes = self.attributes.copy()
+    def conditional(self, z_evidence_dict, mu_dict, logvar_dict, query_attribute,sample_flag=True):
+        evidence_attributes = self.attributes.copy() #ToDO, accept evidence attributes as input to function,dropout
         evidence_attributes.remove(query_attribute)
         evidence_tensors = []  #Unpack z_evidence_dict into single tensor 
         for a in evidence_attributes:         #z_evidence has all attributes during training, need to filter out query_attribute     
@@ -40,15 +40,15 @@ class VariationalAutoencoder_MRF(nn.Module):
             #print(z_evidence_dict[a].shape) #batch_size,latent_dims
 
         z = torch.cat(evidence_tensors,dim=1) #batch_size,evidence_vars*latent_dim
-        z = torch.transpose(z,0,1) #evidence_vars*latent_dim,batch_size
+        #z = torch.transpose(z,0,1) #evidence_vars*latent_dim,batch_size
         q = self.latent_dims
         N_minus_q = q*len(evidence_attributes)
 
-        mu1 = torch.zeros(q,1) #standard normal prior
+        mu1 = torch.zeros(z.size(0), q ,1) #standard normal prior, batch_size,latent_dims,1
         
         mu2_vectors = []
         for e in evidence_attributes:
-            mu2_vectors.append(mu_dict[e].detach()) # detach no error
+            mu2_vectors.append(mu_dict[e].detach())
         mu2 = torch.cat(mu2_vectors,axis=0)
 
 
@@ -56,9 +56,9 @@ class VariationalAutoencoder_MRF(nn.Module):
         
         sigma22_vectors = []
         for e in evidence_attributes:
-            sigma22_vectors.append(var_dict[e].detach())
-        sigma22_diag = torch.cat(sigma22_vectors, axis=0)
-        sigma22 = torch.diag(sigma22_diag)
+            sigma22_vectors.append(logvar_dict[e].detach()) #don't need torch.exp
+        sigma22_diag = torch.cat(sigma22_vectors, axis=1)
+        sigma22 = torch.diag_embed(sigma22_diag)
 
         """
         print(var_dict[e])
@@ -72,45 +72,58 @@ class VariationalAutoencoder_MRF(nn.Module):
                 sigma12_vectors.append(self.covar_dict[query_attribute + e])
             elif str(e + query_attribute) in self.covar_dict.keys():
                 sigma12_vectors.append(torch.transpose(self.covar_dict[e + query_attribute],0,1))
-        sigma12 = torch.cat(sigma12_vectors, axis=1)
-
+        sigma12s = torch.cat(sigma12_vectors, axis=1)
+ 
+        sigma12 = sigma12s.repeat(z.size(0),1,1)
         
-        sigma21 = torch.transpose(sigma12,0,1)
-        mu_cond = mu1 + torch.matmul(torch.matmul(sigma12,torch.inverse(sigma22)), (z-mu2))
+        sigma21 = torch.transpose(sigma12,1,2)
+        
+        #Check if covariance of joint is PSD
+        """
+        print(mu1.shape)
+        print(sigma12.shape)
+        print(sigma22.shape)
+        print(z.shape)
+        print(mu2.shape)
+        print('xx')
+        xx = torch.matmul(sigma12,torch.inverse(sigma22)) #batch_size, latent_dim, latent_dim
+        print(xx.shape) # 256,2,2
+        print('yy')
+        yy = torch.unsqueeze(z - mu2,2)  # 256, 2, 1
+        print(yy.shape)
+        zz = torch.matmul(xx, yy)
+        """
+        mu_cond = mu1 + torch.matmul(torch.matmul(sigma12,torch.inverse(sigma22)), torch.unsqueeze((z-mu2),2))
+        
         """
         print(sigma11)
         print(sigma22)
         print(sigma12)
         print(sigma21)
         """
+
         #var_cond must be PSD
         var_cond = sigma11 - torch.matmul(torch.matmul(sigma12,torch.inverse(sigma22)),sigma21) #latent_dims*evidence_vars,latent_dims*evidence_vars
-        #var_cond_PSD = torch.mm(var_cond,var_cond.t()) + 0.00001*torch.eye(self.latent_dims)
-        LTmask = torch.tril(torch.ones(self.latent_dims,self.latent_dims)) #Lower triangular mask matrix
-        LTmask = Variable(LTmask)
-        L = torch.mul(LTmask, var_cond)
-        var_cond_PSD = torch.mm(L,L.t()) + 0.00001*torch.eye(self.latent_dims)
-
-        #print(var_cond)
-        #print(var_cond_PSD)
-        mu_cond_T = torch.transpose(mu_cond,0,1)
-
-        """
-        print(mu_cond_T.shape)
-        print(mu_cond_T[0])
-        print(mu_cond_T[1])
-        print(var_cond)
-        """
-        #z_cond = self.multivariate_reparameterize(mu_cond_T, var_cond) 
-        z_cond = self.multivariate_reparameterize(mu_cond_T, var_cond_PSD) 
-
-        x_query_batch_cond_recon = self.decode(z_cond, query_attribute)
-        return x_query_batch_cond_recon
+        #var_cond_PSD = torch.bmm(var_cond,torch.transpose(var_cond,1,2)) + 0.00001*torch.eye(self.latent_dims)
+        
+        #LTmask = torch.tril(torch.ones(self.latent_dims,self.latent_dims)) #Lower triangular mask matrix
+        #LTmask = Variable(LTmask)
+        #LTmask = LTmask.repeat(z.size(0),1,1) 
+        #L = torch.mul(LTmask, var_cond)
+        #var_cond_PSD = torch.bmm(L,torch.transpose(L,1,2)) + 0.001*torch.eye(self.latent_dims) #256,2,2
+        
+        if sample_flag == False:
+            return mu_cond, var_cond
+        else:
+            mu_cond_T = torch.transpose(mu_cond,1,2) #256,2,1 to 256,1,2
+            z_cond = self.multivariate_reparameterize(mu_cond_T, var_cond) 
+            x_query_batch_cond_recon = self.decode(z_cond, query_attribute)
+            return x_query_batch_cond_recon
 
     def multivariate_reparameterize(self,mu,covariance):
-        L = torch.cholesky(covariance)
+        L = torch.cholesky(covariance) #256,2,2
         eps = torch.randn_like(mu) #batch_size, latent_dims
-        return mu + torch.matmul(eps, L) #256x2 by 2x2
+        return mu + torch.bmm(eps, L) #256,1,2
     
     def update_args(self, args):
         self.learning_rate = args.learning_rate
@@ -132,8 +145,8 @@ class VariationalAutoencoder_MRF(nn.Module):
 
     #Given mu and logvar generates latent z
     def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5*logvar) 
-        eps = torch.randn_like(std)
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std) #256,2
         return mu + eps*std
     
     #Decodes latent z into reconstruction with dimension equal to num
@@ -171,6 +184,15 @@ class VariationalAutoencoder_MRF(nn.Module):
         KLd = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) # https://stats.stackexchange.com/questions/318748/deriving-the-kl-divergence-loss-for-vaes
         #print(KLd)
         return CE, variational_beta*KLd, CE + variational_beta*KLd
+
+    def cond_vae_loss(self,latent_mu_dict,latent_logvar_dict,mu_cond_dict,var_cond_dict,query_attribute):
+        evidence_attributes = self.attributes.copy() #ToDO, accept evidence attributes as input to function,dropout
+        evidence_attributes.remove(query_attribute)
+        #query_attr is A
+        # LHS of cond_KL, product of two Gaussians
+        #mu_prod = torch.bmm()
+        print(var_cond_dict['A'].shape) #256,2,2
+        return
 
     def latent(self,x, attribute, add_variance=True):
         mu, logvar = self.encode(x, attribute)

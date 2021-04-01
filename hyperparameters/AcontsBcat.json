@@ -5,7 +5,7 @@
     "num_epochs" : 100,
     "num_epochs_optimal" : 500,
     "batch_size" : 256,
-    "learning_rate" : 1e-1,
+    "learning_rate" : 1e-2,
     "activation": "sigmoid",
     "anneal_factor": 50,
     "anneal_factor_optimal": 500,
