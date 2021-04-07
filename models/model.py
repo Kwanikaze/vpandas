@@ -117,9 +117,6 @@ class VariationalAutoencoder_MRF(nn.Module):
           print(self.covar_dict[a+b])
       '''
 
-    def learned_covariance(self,x_dict):
-
-      return
 
     # Conditional of Multivariate Gaussian
     def conditional(self, z_evidence_dict, evidence_attributes, query_attribute,query_repetitions):      
