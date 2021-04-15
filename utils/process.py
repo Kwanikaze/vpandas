@@ -55,7 +55,6 @@ def standarize_real_columns(df,real_vars): #Standardize to 0,1
 
 
 def preprocess(df_raw,args, real_vars, cat_vars, duplications=100):
-  #ToDo Standardize to 0,1
   df = duplicate_dataframe(df_raw, duplications)
   df = df.sample(frac=1, random_state=args.random_seed)
   print(df)

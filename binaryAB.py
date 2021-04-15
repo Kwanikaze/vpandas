@@ -13,8 +13,7 @@ import utils.params as params
 
 #dict of hyperparameters
 args = params.Params('./hyperparameters/binaryAB_sigmoid.json')
-
-df = process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_3.csv')
+df = process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_2.csv')
 input_dims = {'A': 3,'B': 3} #dicts ordered
 data2 = False
 

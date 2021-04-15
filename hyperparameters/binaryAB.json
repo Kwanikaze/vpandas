@@ -12,6 +12,9 @@
     "patience": 20,
     "random_seed": 2,
     "hypertune": "True",
-    "emperical": "True"
+    "emperical": "False",
+    "graph_samples": "True",
+    "add_noise": "False",
+    "train_on_query": "False"
 }
 
