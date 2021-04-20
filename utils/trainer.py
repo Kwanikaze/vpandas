@@ -12,14 +12,17 @@ def trainVAE_MRF(VAE_MRF, args: dict):
     device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
     VAE_MRF.update_args(args)       
     optimizer = torch.optim.Adam(params = VAE_MRF.parameters(), lr = VAE_MRF.learning_rate) #single optimizer or multiple https://discuss.pytorch.org/t/two-optimizers-for-one-model/11085/12
-    print(list(VAE_MRF.parameters()))
+    #print(list(VAE_MRF.parameters()))
     x_train_dict = {a: Variable(torch.from_numpy(VAE_MRF.train_df_OHE.filter(like=a,axis=1).values)).to(device) for a in VAE_MRF.attributes}
+    
     x_val_dict = {a: Variable(torch.from_numpy(VAE_MRF.val_df_OHE.filter(like=a, axis=1).values)).to(device) for a in VAE_MRF.attributes}
 
     val_loss = 0
 
     early_stopping = EarlyStopping(patience=args.patience, verbose=False)
     N = VAE_MRF.num_samples
+    #print("CovarianceAB")
+    #print(VAE_MRF.covar_dict.items())
     for epoch in range(VAE_MRF.num_epochs):
         VAE_MRF.train() #set model mode to train
         loss,CE,KLd,KLd_cond,CE_evidence = {},{},{},{},{}
@@ -49,15 +52,16 @@ def trainVAE_MRF(VAE_MRF, args: dict):
                 x_batch_recon_dict[a],z_evidence_dict[a], latent_mu_dict[a], latent_logvar_dict[a] = VAE_MRF.forward(x_batch_dict[a].float(),attribute=a) 
                 #x_batch_recon_dict[a] is   batch_size, input_dims[a]
                 #z_evidence_dict[a], latent_mu_dict[a], latent_logvar_dict[a] is    batch_size,latent_dims
-
+            VAE_MRF.emp_covariance(z_evidence_dict)
             for a in rand_attrs:#VAE_MRF.attributes:
+                """
                 #Marginal VAE loss for each attribute: recon_loss+KLd
                 train_CE_dict[a], train_KLd_dict[a], train_loss_dict[a] = VAE_MRF.vae_loss(epoch, 
                             x_batch_recon_dict[a], x_batch_targets_dict[a], latent_mu_dict[a], latent_logvar_dict[a], attribute=a) 
                 loss[a] += train_loss_dict[a].item() / VAE_MRF.batch_size # update epoch loss
                 CE[a] += train_CE_dict[a].item() / VAE_MRF.batch_size
                 KLd[a] += train_KLd_dict[a].item() / VAE_MRF.batch_size
-                
+                """
                 #Cross-directional VAE loss
                 evidence_attributes = VAE_MRF.attributes.copy() #ToDO, accept evidence attributes as input to function,dropout
                 evidence_attributes.remove(a)
@@ -77,10 +81,10 @@ def trainVAE_MRF(VAE_MRF, args: dict):
                     train_loss_dict[str(a) + "cond_recon"] = \
                         VAE_MRF.recon_loss(x_batch_cond_recon[a], x_batch_targets_dict[a], a)
                     CE_evidence[a] += train_loss_dict[str(a) + "cond_recon"].item() / VAE_MRF.batch_size
-            
+                #"""
             #aa = list(VAE_MRF.parameters())[-1].clone()
             with torch.autograd.set_detect_anomaly(True):
-                #"""
+                """
                 for k in train_loss_dict.keys():
                     #print(k)
                     optimizer.zero_grad()
@@ -89,30 +93,36 @@ def trainVAE_MRF(VAE_MRF, args: dict):
                 optimizer.step()        #update parameters based on gradient
                 """
                 optimizer.zero_grad()
+                #print(train_loss_dict.keys())
                 for k in train_loss_dict.keys():
-                    train_loss += train_loss_dict[k]
-                train_loss.backward(retain_graph=True)
+                    train_loss_batch += train_loss_dict[k]
+                train_loss_batch.backward(retain_graph=True)
+                train_loss += train_loss_batch / VAE_MRF.batch_size
                 optimizer.step() 
-                """
+                #"""
             #bb = list(VAE_MRF.parameters())[-1].clone()
             #print(torch.equal(aa.data, bb.data))
             #print(list(VAE_MRF.parameters())[-1].grad)
             #print("CovarianceAB")
             #print(VAE_MRF.covar_dict.items())
-        print("")
-        print("Epoch %d/%d" % (epoch+1,VAE_MRF.num_epochs))
-        for a in VAE_MRF.attributes:
-            print("Marginal VAE %s: \t CE: %.5f, KLd: %.5f, Train loss=%.5f" % (a,CE[a], KLd[a], loss[a]), end='\n', flush=True)
-            #print("Attribute: %s, Epoch %d/%d\t CE: %.5f, KLd: %.5f, Train loss=%.5f" 
-            #    % (a, epoch + 1, VAE_MRF.num_epochs, CE[a], KLd[a], loss[a]), end='\n', flush=True)
-            #print("%s_cond_recon loss: %.5f" % (a,train_loss_dict[str(a) + "cond_KL"]), end='\n', flush=True)
-            if VAE_MRF.train_on_query == "True": 
-                print("%s_cond_KL: %.5f" % (a, KLd_cond[str(a)]), end='\n', flush=True)
-            else:
-                print("%s_cond_recon: %.5f" % (a, CE_evidence[str(a)]), end='\n', flush=True)
-        print("Total Train Loss: %.5f" % (train_loss), end='\n', flush=True)
+        
+        if epoch % 10 == 0:
+            print("")
+            print("Epoch %d/%d" % (epoch,VAE_MRF.num_epochs))
+            for a in VAE_MRF.attributes:
+                print("Marginal VAE %s: \t CE: %.5f, KLd: %.5f, Train loss=%.5f" % (a,CE[a], KLd[a], loss[a]), end='\n', flush=True)
+                #print("Attribute: %s, Epoch %d/%d\t CE: %.5f, KLd: %.5f, Train loss=%.5f" 
+                #    % (a, epoch + 1, VAE_MRF.num_epochs, CE[a], KLd[a], loss[a]), end='\n', flush=True)
+                #print("%s_cond_recon loss: %.5f" % (a,train_loss_dict[str(a) + "cond_KL"]), end='\n', flush=True)
+                if VAE_MRF.train_on_query == "True": 
+                    print("%s_cond_KL: %.5f" % (a, KLd_cond[str(a)]), end='\n', flush=True)
+                else:
+                    print("%s_cond_recon: %.5f" % (a, CE_evidence[str(a)]), end='\n', flush=True)
+            print("Total Train Loss: %.5f" % (train_loss), end='\n', flush=True)
 
         #Test with all validation data
         #VAE_MRF.eval()
     #print(list(VAE_MRF.parameters()))
     print("\nTraining MRF finished!")
+    #print("CovarianceAB")
+    #print(VAE_MRF.covar_dict.items())

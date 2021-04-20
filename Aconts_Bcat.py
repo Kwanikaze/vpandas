@@ -35,7 +35,7 @@ VAE_MRF = VAE_MRF.to(device)
 trainer.trainVAE_MRF(VAE_MRF,args)
 #model.trainVAE_MRF(VAE_MRF,attributes,df,args)
 
-#checks.graphLatentSpace(VAE_MRF,train_df,train_df_OHE,attributes,args,cat_vars)
+checks.graphLatentSpace(VAE_MRF,train_df,train_df_OHE,attributes,args,cat_vars)
 
 
 x_list_raw = np.array([1,11,22,33,44,55,66,77,88,99])

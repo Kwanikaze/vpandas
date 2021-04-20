@@ -57,12 +57,12 @@ def standarize_real_columns(df,real_vars): #Standardize to 0,1
 def preprocess(df_raw,args, real_vars, cat_vars, duplications=100):
   df = duplicate_dataframe(df_raw, duplications)
   df = df.sample(frac=1, random_state=args.random_seed)
-  print(df)
+  #print(df)
   if args.add_noise == "True":
     df = unif_noise_to_real_columns(df, real_vars)
   df, min_max_scalar_dict = standarize_real_columns(df,real_vars)
   df_OHE = one_hot_encode_columns(df, cat_vars, args)
-  print(df_OHE)
+  #print(df_OHE)
   return df, df_OHE, min_max_scalar_dict
 
 def split(df,df_OHE,split_pct):

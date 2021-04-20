@@ -14,13 +14,19 @@ def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,args,cat_vars):
         num_samples = int(df.shape[0])
         x_dict = {a: df.filter(like=a,axis=1).values for a in attributes}
         x_dict_OHE = {a: Variable(torch.from_numpy(df_OHE.filter(like=a,axis=1).values)) for a in attributes}
-        z_dict = {a: VAE_MRF.latent(x_dict_OHE[a].float(), attribute = a, add_variance=True) for a in attributes} 
+        z_dict = {}
+        for a in attributes:
+            z_dict[a],_,_ = VAE_MRF.latent(x_dict_OHE[a].float(), attribute = a, add_variance=True)
+        #z_dict = {a: VAE_MRF.latent(x_dict_OHE[a].float(), attribute = a, add_variance=True) for a in attributes} 
         np_z_dict = {a: z_dict[a].cpu().detach().numpy().reshape(num_samples,args.latent_dims) for a in attributes}  #num_samples,latent_dims
         for a in attributes:
             for s in range(0,num_samples):
                 val = str(x_dict[a][s]).lstrip('[').rstrip(']')
                 if args.latent_dims== 1:
-                    plt.plot(np_z_dict[a], 'o', color='black',label="z"+str(a));
+                    #plt.plot(np_z_dict[a], 'o', color='black',label="z"+str(a));
+                    if (float(val) == math.floor(float(val)) and a in cat_vars): #check if val contains no decimal, is cat_var
+                        val = val.replace('.', '')
+                        plt.plot(np_z_dict[a][s,0], 'o', color=cat_color_dict[val])
                 elif args.latent_dims == 2:
                     if (float(val) == math.floor(float(val)) and a in cat_vars): #check if val contains no decimal, is cat_var
                         val = val.replace('.', '')
@@ -49,10 +55,21 @@ def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,args,cat_vars):
                 labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
                 by_label = dict(zip(labels, handles))
                 plt.legend(by_label.values(), by_label.keys(),loc=1)
-            else:
+            elif args.latent_dims == 3:
                 plt.legend(loc=1)
             plt.show()
 
+def graphRecons(mu_cond, indices_max, evidence_attributes,query_attribute, query_repetitions, cat_vars):
+    for s in range(0,query_repetitions):
+        val = str(indices_max[s])
+        if query_attribute in cat_vars:
+            plt.plot(mu_cond[s,0],mu_cond[s,1], 'o', color=cat_color_dict[val] ,label=val);
+    plt.title("P(z{} | z{}) Multivariate Normal Samples".format(query_attribute,str(evidence_attributes).lstrip('[').rstrip(']')))
+    handles, labels = plt.gca().get_legend_handles_labels()
+    labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys(),loc=1)
+    plt.show()
 
 def graphSamples(mu_cond,var_cond,z_cond,recon_max_idxs,evidence_attributes,query_attribute,query_repetitions,cat_vars):
     #print(z_cond)

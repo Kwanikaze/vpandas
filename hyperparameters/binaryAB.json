@@ -3,9 +3,9 @@
     "data_dir" : "./data/",
     "latent_dims" : 2, 
     "num_epochs" : 200,
-    "batch_size" : 128,
-    "learning_rate" : 1e-3,
-    "activation": "leaky_relu",
+    "batch_size" : 256,
+    "learning_rate" : 1e-2,
+    "activation": "sigmoid",
     "anneal_factor": 1000,
     "anneal_factor_optimal": 2000,
     "variational_beta" : 0.1,
@@ -14,7 +14,7 @@
     "hypertune": "True",
     "emperical": "False",
     "graph_samples": "True",
-    "add_noise": "False",
+    "add_noise": "True",
     "train_on_query": "False"
 }
 
