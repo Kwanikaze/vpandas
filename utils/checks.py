@@ -26,7 +26,7 @@ def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,args,cat_vars):
                     #plt.plot(np_z_dict[a], 'o', color='black',label="z"+str(a));
                     if (float(val) == math.floor(float(val)) and a in cat_vars): #check if val contains no decimal, is cat_var
                         val = val.replace('.', '')
-                        plt.plot(np_z_dict[a][s,0], 'o', color=cat_color_dict[val])
+                        plt.plot(np_z_dict[a][s,0], 'o', color=cat_color_dict[val], label=val)
                 elif args.latent_dims == 2:
                     if (float(val) == math.floor(float(val)) and a in cat_vars): #check if val contains no decimal, is cat_var
                         val = val.replace('.', '')
@@ -55,7 +55,7 @@ def graphLatentSpace(VAE_MRF,df,df_OHE,attributes,args,cat_vars):
                 labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
                 by_label = dict(zip(labels, handles))
                 plt.legend(by_label.values(), by_label.keys(),loc=1)
-            elif args.latent_dims == 3:
+            else:
                 plt.legend(loc=1)
             plt.show()
 
@@ -63,7 +63,8 @@ def graphRecons(mu_cond, indices_max, evidence_attributes,query_attribute, query
     for s in range(0,query_repetitions):
         val = str(indices_max[s])
         if query_attribute in cat_vars:
-            plt.plot(mu_cond[s,0],mu_cond[s,1], 'o', color=cat_color_dict[val] ,label=val);
+            plt.plot(mu_cond[s,0], 'o', color=cat_color_dict[val] ,label=val);
+            #plt.plot(mu_cond[s,0],mu_cond[s,1], 'o', color=cat_color_dict[val] ,label=val);
     plt.title("P(z{} | z{}) Multivariate Normal Samples".format(query_attribute,str(evidence_attributes).lstrip('[').rstrip(']')))
     handles, labels = plt.gca().get_legend_handles_labels()
     labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))

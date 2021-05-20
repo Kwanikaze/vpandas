@@ -3,7 +3,7 @@ import utils.checks as checks
 import utils.trainer as trainer
 #import models.model as model
 import models.joint_model as model
-#import models.joint_model_linear as model
+#import models.joint_model_linear as model #Simple, linear encoder, linear decoder, no activation functions
 
 import numpy as np
 import pandas as pd
@@ -16,7 +16,8 @@ import utils.params as params
 import sys
 
 args = params.Params('./hyperparameters/binaryAB.json')
-df_raw =  process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_2.csv')
+#df_raw =  process.read_csv('https://raw.githubusercontent.com/Kwanikaze/vpandas/master/data/data_2.csv')
+df_raw = pd.DataFrame(data={'A':[0,1],'B':[0,1]})
 print("Raw Data")
 print(df_raw)
 prob = df_raw.groupby(['A','B']).size().div(len(df_raw))
@@ -43,7 +44,7 @@ cat_vars = [x for x in attributes if x not in real_vars]
 df, df_OHE,mms_dict = process.preprocess(df_raw, args, real_vars, cat_vars, duplications=20)
 train_df, train_df_OHE, val_df, val_df_OHE, test_df, test_df_OHE = process.split(df,df_OHE,[0.7,0.85])
 
-#Simple, linear encoder, linear decoder, no activation functions
+
 use_gpu = False
 device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
 VAE_MRF = model.VariationalAutoencoder_MRF(train_df_OHE, val_df_OHE, attributes,input_dims, args,real_vars,cat_vars,mms_dict)
@@ -54,7 +55,8 @@ checks.graphLatentSpace(VAE_MRF,train_df,train_df_OHE,attributes,args,cat_vars)
 
 x_test = np.eye(input_dims["B"])[np.arange(input_dims["B"])]  # Test data (one-hot encoded)
 noise = np.random.uniform(low=0.0,high=1.0,size=x_test.shape)
-x_test = Variable(torch.from_numpy(x_test + noise))
+#x_test = Variable(torch.from_numpy(x_test + noise))
+x_test = Variable(torch.from_numpy(x_test))
 x_test = x_test.to(device)
 
 print("Print prediction results for A only:")

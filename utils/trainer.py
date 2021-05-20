@@ -12,6 +12,10 @@ def trainVAE_MRF(VAE_MRF, args: dict):
     device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
     VAE_MRF.update_args(args)       
     optimizer = torch.optim.Adam(params = VAE_MRF.parameters(), lr = VAE_MRF.learning_rate) #single optimizer or multiple https://discuss.pytorch.org/t/two-optimizers-for-one-model/11085/12
+    
+    for name, param in VAE_MRF.named_parameters():
+        if param.requires_grad:
+            print (name, param.data)
     #print(list(VAE_MRF.parameters()))
     x_train_dict = {a: Variable(torch.from_numpy(VAE_MRF.train_df_OHE.filter(like=a,axis=1).values)).to(device) for a in VAE_MRF.attributes}
     
@@ -54,14 +58,14 @@ def trainVAE_MRF(VAE_MRF, args: dict):
                 #z_evidence_dict[a], latent_mu_dict[a], latent_logvar_dict[a] is    batch_size,latent_dims
             VAE_MRF.emp_covariance(z_evidence_dict)
             for a in rand_attrs:#VAE_MRF.attributes:
-                """
+                
                 #Marginal VAE loss for each attribute: recon_loss+KLd
                 train_CE_dict[a], train_KLd_dict[a], train_loss_dict[a] = VAE_MRF.vae_loss(epoch, 
                             x_batch_recon_dict[a], x_batch_targets_dict[a], latent_mu_dict[a], latent_logvar_dict[a], attribute=a) 
                 loss[a] += train_loss_dict[a].item() / VAE_MRF.batch_size # update epoch loss
                 CE[a] += train_CE_dict[a].item() / VAE_MRF.batch_size
                 KLd[a] += train_KLd_dict[a].item() / VAE_MRF.batch_size
-                """
+                
                 #Cross-directional VAE loss
                 evidence_attributes = VAE_MRF.attributes.copy() #ToDO, accept evidence attributes as input to function,dropout
                 evidence_attributes.remove(a)
@@ -121,7 +125,7 @@ def trainVAE_MRF(VAE_MRF, args: dict):
             print("Total Train Loss: %.5f" % (train_loss), end='\n', flush=True)
 
         #Test with all validation data
-        #VAE_MRF.eval()
+        VAE_MRF.eval()
     #print(list(VAE_MRF.parameters()))
     print("\nTraining MRF finished!")
     #print("CovarianceAB")

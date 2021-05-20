@@ -11,7 +11,7 @@ class VariationalAutoencoder_MRF(nn.Module):
         super().__init__()
         self.train_df_OHE = train_df_OHE
         self.val_df_OHE = val_df_OHE
-        self.latent_dims = args.latent_dims #later dict so latent_dim different for each attribute 
+        self.latent_dims = args.latent_dims # dict so latent_dim different for each attribute 
         self.input_dims = input_dims # dict # possible outcomes for each categorical attribute
         self.num_samples =  int(train_df_OHE.shape[0])
         self.attributes = attributes
@@ -27,7 +27,12 @@ class VariationalAutoencoder_MRF(nn.Module):
         self.mms_dict = mms_dict #MinMaxScalar for real vars
         #self.num_runs = args.num_runs # Sensitive to initial parameters, take best performing model out of runs
         self.graph_samples = args.graph_samples
-        self.covar_dict = nn.ParameterDict({'A'+'B': nn.Parameter(torch.rand(size=(self.latent_dims,self.latent_dims))/100,requires_grad=True) })
+        #self.covar_dict = nn.ParameterDict({'A'+'B': nn.Parameter(torch.rand(size=(self.latent_dims,self.latent_dims))/100,requires_grad=True) })
+        f = 2 # sum of latent_dims total
+        self.covar_net = nn.Sequential(
+                            torch.nn.Linear(f, f),
+                            torch.nn.ReLU(),
+                            torch.nn.Linear(f, f))
         self.mu_emp_dict, self.covar_emp_dict = {},{}
     
     #Query attribute's mu is 0, logvar is 1
@@ -60,7 +65,7 @@ class VariationalAutoencoder_MRF(nn.Module):
                 self.covar_emp_dict[a+b] = covar_emp[i:i+ld,j:j+ld]
                 self.covar_emp_dict[a+b] = torch.tensor(self.covar_emp_dict[a+b]).float() #each entry: latent dim, latent dim
                 j += ld
-                i += ld
+            i += ld
     
     def conditional(self, z_evidence_dict, mu_dict, logvar_dict, evidence_attributes, query_attribute,sample_flag=True):
         evidence_tensors = []  #Unpack z_evidence_dict into single tensor 
@@ -73,29 +78,26 @@ class VariationalAutoencoder_MRF(nn.Module):
         N_minus_q = q*len(evidence_attributes)
 
         mu1 = torch.zeros(z.size(0), q ,1) #standard normal prior, shape is batch_size,q,1
-
-        
-        mu1s = self.mu_emp_dict[query_attribute]
+        mu1s = self.mu_emp_dict[query_attribute] #use emperical mean instead of 0
         mu1 = mu1s.repeat(z.size(0),1,1)
 
 
         mu2_vectors = []
         for e in evidence_attributes:
-            mu2_vectors.append(mu_dict[e].detach())
+            mu2_vectors.append(mu_dict[e])
         mu2 = torch.cat(mu2_vectors,dim=0) 
         mu2 = mu2.unsqueeze(2) #mu2 shape is batch_size,N_minus_q,1
 
         sigma11s = torch.diag(torch.ones(q)) #standard normal prior has identity covariance, sigma11 is of shape q,q
         sigma11 = sigma11s.repeat(z.size(0),1,1)
-
-        #sigma11s = self.covar_emp_dict[query_attribute+query_attribute]
-        #sigma11 = sigma11s.repeat(z.size(0),1,1)
+        sigma11s = self.covar_emp_dict[query_attribute+query_attribute]
+        sigma11 = sigma11s.repeat(z.size(0),1,1)
         #print(sigma11.shape)
         #print("shape")
 
         sigma22_vectors = []
         for e in evidence_attributes:
-            sigma22_vectors.append(torch.exp(logvar_dict[e].detach()))
+            sigma22_vectors.append(torch.exp(logvar_dict[e]))
         sigma22_diag = torch.cat(sigma22_vectors, dim=0)
         sigma22 = torch.diag_embed(sigma22_diag) #sigma22 shape is batch_size, N_minus_q, N_minus_q
 
@@ -120,7 +122,7 @@ class VariationalAutoencoder_MRF(nn.Module):
             elif str(e + query_attribute) in self.covar_dict.keys():
                 sigma12_vectors.append(torch.transpose(self.covar_dict[e + query_attribute],0,1))
         #"""
-        sigma12s = torch.cat(sigma12_vectors, axis=1)
+        sigma12s = torch.cat(sigma12_vectors, dim=0)
         sigma12 = sigma12s.repeat(z.size(0),1,1)
         sigma21 = torch.transpose(sigma12,1,2)
         
@@ -128,17 +130,18 @@ class VariationalAutoencoder_MRF(nn.Module):
         mu_cond = mu1 + torch.matmul(torch.matmul(sigma12,torch.inverse(sigma22)), (z-mu2))
         
         #var_cond must be PSD
-        var_cond = sigma11 - torch.matmul(torch.matmul(sigma12,torch.inverse(sigma22)),sigma21) #latent_dims*evidence_vars,latent_dims*evidence_vars
+        var_cond = sigma11 - torch.matmul(torch.matmul(sigma12,torch.inverse(sigma22)),sigma21) 
         
         LTmask = torch.tril(torch.ones(self.latent_dims,self.latent_dims)) #Lower triangular mask matrix
         LTmask = Variable(LTmask)
         LTmask = LTmask.repeat(z.size(0),1,1) 
         L = torch.mul(LTmask, var_cond)
-        #var_cond = torch.bmm(L,torch.transpose(L,1,2)) + 0.001*torch.eye(self.latent_dims) #256,2,2
-        var_cond = var_cond + 0.001*torch.eye(self.latent_dims) 
+        var_cond_PD = torch.bmm(L,torch.transpose(L,1,2)) + 0.001*torch.eye(self.latent_dims) #256,2,2 # positive definite PD
 
-        #var_cond = var_cond + 10*torch.eye(self.latent_dims)
+        #var_cond = var_cond + 0.1*torch.eye(self.latent_dims)
         #var_cond = torch.bmm(var_cond,torch.transpose(var_cond,1,2)) + 0.1*torch.eye(self.latent_dims)
+
+
 
         """
         print("z")
@@ -162,18 +165,30 @@ class VariationalAutoencoder_MRF(nn.Module):
         """
 
         if sample_flag == False:
-            return -1, -1, mu_cond, var_cond
+            return -1, -1, mu_cond, var_cond_PD
         else:
-            z_cond = self.multivariate_reparameterize(mu_cond, var_cond)  #256,2,1 
+            z_cond = self.multivariate_reparameterize(mu_cond, var_cond_PD)  #256,2,1 
             z_cond = z_cond.squeeze(2) #256,2
             x_query_batch_cond_recon = self.decode(z_cond, query_attribute) # batch_size,input_dims[a]
             """
+            print("******")
+            print(mu1.requires_grad) #False
+            print(mu2.requires_grad) #True
+            print(sigma11.requires_grad) #False
+            print(sigma22.requires_grad) #True
+            print(sigma12.requires_grad) #True
+            print(sigma21.requires_grad) #True
+            print(mu_cond.requires_grad) #True
+            print(var_cond_PD.requires_grad) #True
+
             print("z_cond")
             print(z_cond.shape)
+            print(z_cond.requires_grad)
             print("x_query_batch_cond_recon")
             print(x_query_batch_cond_recon.shape)
+            print(x_query_batch_cond_recon.requires_grad) #True
             """
-            return x_query_batch_cond_recon, z_cond,mu_cond,var_cond
+            return x_query_batch_cond_recon, z_cond,mu_cond,var_cond_PD
 
     def multivariate_reparameterize(self,mu,covariance):
         L = torch.cholesky(covariance) #256,2,2
@@ -197,6 +212,7 @@ class VariationalAutoencoder_MRF(nn.Module):
             h1 = torch.relu(self.layers['fc1' + str(attribute)](x))
         elif self.activation == "leaky_relu":
             h1 = F.leaky_relu(self.layers['fc1' + str(attribute)](x))
+        #h1 = self.layers['fc1' + str(attribute)](x)
         return self.layers['fc_mu' + str(attribute)](h1), self.layers['fc_logvar' + str(attribute)](h1)
 
     #Given mu and logvar generates latent z
@@ -260,18 +276,18 @@ class VariationalAutoencoder_MRF(nn.Module):
         # LHS of cond_KL, product of two Gaussians
         mu_evid_vectors = []
         for e in evidence_attributes:
-            mu_evid_vectors.append(mu_dict[e].detach())
+            mu_evid_vectors.append(mu_dict[e])
         mu_evid = torch.cat(mu_evid_vectors,axis=0).unsqueeze(2)
 
-        mu_query = mu_dict[query_attribute].detach().unsqueeze(2)
+        mu_query = mu_dict[query_attribute].unsqueeze(2)
         
         var_evid_vectors = []
         for e in evidence_attributes:
-            var_evid_vectors.append(torch.exp(logvar_dict[e].detach()))
+            var_evid_vectors.append(torch.exp(logvar_dict[e]))
         var_evid_diag = torch.cat(var_evid_vectors, axis=1)
         var_evid = torch.diag_embed(var_evid_diag)
 
-        var_query = torch.diag_embed(torch.exp(logvar_dict[query_attribute].detach()))
+        var_query = torch.diag_embed(torch.exp(logvar_dict[query_attribute]))
         
         mu_cond = mu_cond_dict[query_attribute]
         var_cond = var_cond_dict[query_attribute]
@@ -317,12 +333,12 @@ class VariationalAutoencoder_MRF(nn.Module):
         # query_recon is 10k,input_dims[query_attr]
         # mu_cond is 10k,2,1
         # var_cond is 10k,2,2
-        """
+        #"""
         print("mu_cond")
         print(mu_cond[0:4])
         print("var_cond")
         print(var_cond[0:4])
-        """
+        #"""
 
         #_, recon_max_idxs = query_recon.max(dim=1)
         #if (self.latent_dims ==1 or self.latent_dims ==2) and self.graph_samples == "True": #Cannot graph since have 10k different mu_cond, since have 10k different z_evidence
